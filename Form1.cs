@@ -6,7 +6,6 @@ using System.Data;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
-using System.IO.Compression;
 using System.IO.Ports;
 using System.Linq;
 using System.Management;
@@ -30,753 +29,19 @@ using Tstool.My;
 
 namespace Tstool
 {
-	// Token: 0x0200000E RID: 14
+	// Token: 0x0200000B RID: 11
 	[DesignerGenerated]
 	public partial class Form1 : Form
 	{
-		// Token: 0x17000013 RID: 19
-		// (get) Token: 0x0600003A RID: 58 RVA: 0x0000272E File Offset: 0x0000092E
-		// (set) Token: 0x0600003B RID: 59 RVA: 0x00002738 File Offset: 0x00000938
+		// Token: 0x1700000E RID: 14
+		// (get) Token: 0x06000028 RID: 40 RVA: 0x000023EF File Offset: 0x000005EF
+		// (set) Token: 0x06000029 RID: 41 RVA: 0x000023F9 File Offset: 0x000005F9
 		private virtual SerialPort SerialPort1 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x17000014 RID: 20
-		// (get) Token: 0x0600003C RID: 60 RVA: 0x00002741 File Offset: 0x00000941
-		// (set) Token: 0x0600003D RID: 61 RVA: 0x0000274B File Offset: 0x0000094B
-		private virtual System.Timers.Timer updateTimer { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+		// Token: 0x0600002A RID: 42 RVA: 0x00002404 File Offset: 0x00000604
+		
 
-		// Token: 0x0600003E RID: 62 RVA: 0x00002754 File Offset: 0x00000954
-		private async void Form1_Load(object sender, EventArgs e)
-		{
-			bool flag = !(await this.EsVersionActualizada());
-			if (!flag)
-			{
-				this.AplicarEstilosGlobales();
-				this.SetAllButtonsEnabled(false, null);
-				if (this.EstaEnMaquinaVirtual())
-				{
-					MessageBox.Show("⚠️ No se permite ejecutar en entornos virtuales.");
-					Application.Exit();
-				}
-				else if (this.EstaSiendoAnalizado())
-				{
-					MessageBox.Show("⚠️ Herramientas de análisis detectadas. El programa se cerrará.");
-					Application.Exit();
-				}
-				else if (Debugger.IsAttached)
-				{
-					MessageBox.Show("❌ No se permite ejecutar en modo depuración.");
-					Application.Exit();
-				}
-				else
-				{
-					string uid = MySettingsProperty.Settings.FirebaseUid;
-					string idToken = MySettingsProperty.Settings.FirebaseIdToken;
-					string plan = await FirebasePermissions.ObtenerPlanDelUsuario(uid, idToken);
-					if (string.IsNullOrEmpty(plan))
-					{
-						MessageBox.Show("Usuario no autorizado.");
-						this.Close();
-					}
-					else
-					{
-						JObject accesos = await FirebasePermissions.ObtenerAccesosDelPlan(plan, idToken);
-						if (accesos == null)
-						{
-							MessageBox.Show("No se pudieron obtener los accesos.");
-							this.Close();
-						}
-						else
-						{
-							this.UserE.Text = string.Format("User: {0} ({1})", MySettingsProperty.Settings.UserEmail, plan.ToUpper());
-							FirebasePermissions.AplicarPermisosDesdeFirebase(this, accesos);
-							this.SerialPort1.BaudRate = 9600;
-							this.SerialPort1.Parity = Parity.None;
-							this.SerialPort1.DataBits = 8;
-							this.SerialPort1.StopBits = StopBits.One;
-							this.SerialPort1.Handshake = Handshake.None;
-							this.SerialPort1.ReadTimeout = 1000;
-							this.SerialPort1.WriteTimeout = 1000;
-							this.InitializeFastbootTimer();
-							this.InitializeControls();
-							this.UpdateComPortList();
-							this.updateTimer = new System.Timers.Timer(5000.0);
-							this.updateTimer.Elapsed += this.OnTimedEvent;
-							this.updateTimer.AutoReset = true;
-							this.updateTimer.Enabled = true;
-							this.UpdateDeviceList();
-							this.UserE.Text = string.Format("UserE: {0}", MySettingsProperty.Settings.UserEmail);
-							await this.MostrarCreditosActuales();
-							string correoAdmin = "yodesbloqueoyreparo@gmail.com";
-							string uidAdmin = "qVzqwOOMsBfsf8JNyOtR2lMXgQF2";
-							this.btnGestionarCreditos.Visible = (Operators.CompareString(MySettingsProperty.Settings.UserEmail, correoAdmin, false) == 0 && Operators.CompareString(MySettingsProperty.Settings.FirebaseUid, uidAdmin, false) == 0);
-							this.AplicarResponsividad();
-							this.ResponsividadTotal();
-						}
-					}
-				}
-			}
-		}
-
-		// Token: 0x0600003F RID: 63 RVA: 0x0000279C File Offset: 0x0000099C
-		public string GetFileHash(string filePath)
-		{
-			string result;
-			using (SHA256 sha = SHA256.Create())
-			{
-				using (FileStream fileStream = File.OpenRead(filePath))
-				{
-					byte[] value = sha.ComputeHash(fileStream);
-					result = BitConverter.ToString(value).Replace("-", "").ToLowerInvariant();
-				}
-			}
-			return result;
-		}
-
-		// Token: 0x06000040 RID: 64 RVA: 0x00002814 File Offset: 0x00000A14
-		private void ConfigurarListView()
-		{
-			ListView listView = this.ListView1;
-			listView.View = View.Details;
-			listView.FullRowSelect = true;
-			listView.GridLines = true;
-			listView.Columns.Clear();
-			listView.Columns.Add("Firmware", 300);
-			listView.Columns.Add("Año", 60);
-			listView.Columns.Add("URL", 500);
-			listView.Items.Clear();
-		}
-
-		// Token: 0x06000041 RID: 65 RVA: 0x0000289C File Offset: 0x00000A9C
-		private string GetLoggedInUserInfo()
-		{
-			string userEmail = MySettingsProperty.Settings.UserEmail;
-			bool flag = string.IsNullOrEmpty(userEmail);
-			string result;
-			if (flag)
-			{
-				result = "Usuario no logueado";
-			}
-			else
-			{
-				result = string.Format("User {0}", userEmail);
-			}
-			return result;
-		}
-
-		// Token: 0x06000042 RID: 66 RVA: 0x000028D8 File Offset: 0x00000AD8
-		public async Task AplicarPermisosDesdeFirebasePorPlan()
-		{
-			string uid = MySettingsProperty.Settings.FirebaseUid;
-			string idToken = MySettingsProperty.Settings.FirebaseIdToken;
-			string plan = await FirebasePermissions.ObtenerPlanDelUsuario(uid, idToken);
-			if (string.IsNullOrEmpty(plan))
-			{
-				MessageBox.Show("⚠ No se pudo obtener el plan del usuario.");
-			}
-			else
-			{
-				JObject accesos = await FirebasePermissions.ObtenerAccesosDelPlan(plan, idToken);
-				if (accesos == null)
-				{
-					MessageBox.Show("⚠ No se pudieron obtener los accesos del plan.");
-				}
-				else
-				{
-					FirebasePermissions.AplicarPermisosDesdeFirebase(this, accesos);
-				}
-			}
-		}
-
-		// Token: 0x06000043 RID: 67 RVA: 0x0000291C File Offset: 0x00000B1C
-		public Form1()
-		{
-			base.Load += this.Form1_Load;
-			base.FormClosing += this.Form1_FormClosing;
-			this.downloading = false;
-			this.xmlFilePath = string.Empty;
-			this.processRunning = false;
-			this.cancelRequested = false;
-			this.isUnzipping = false;
-			this.SerialPort1 = new SerialPort();
-			this.placeholderText = "Buscar marca o modelo...";
-			this.verificandoBloqueos = false;
-			this.currentFilePath = string.Empty;
-			this.processLock = RuntimeHelpers.GetObjectValue(new object());
-			this.misc_qualcomm = new byte[]
-			{
-				98,
-				111,
-				111,
-				116,
-				45,
-				114,
-				101,
-				99,
-				111,
-				118,
-				101,
-				114,
-				121,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				114,
-				101,
-				99,
-				111,
-				118,
-				101,
-				114,
-				121,
-				10,
-				45,
-				45,
-				102,
-				111,
-				114,
-				109,
-				97,
-				116,
-				95,
-				100,
-				97,
-				116,
-				97,
-				95,
-				98,
-				97,
-				99,
-				107,
-				117,
-				112,
-				10,
-				45,
-				45,
-				114,
-				101,
-				97,
-				115,
-				111,
-				110,
-				61,
-				77,
-				97,
-				115,
-				116,
-				101,
-				114,
-				67,
-				108,
-				101,
-				97,
-				114,
-				67,
-				111,
-				110,
-				102,
-				105,
-				114,
-				109,
-				10,
-				45,
-				45,
-				108,
-				111,
-				99,
-				97,
-				108,
-				101,
-				61,
-				122,
-				104,
-				45,
-				67,
-				78,
-				10,
-				10,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0
-			};
-			this.para_mtk = new byte[]
-			{
-				98,
-				111,
-				111,
-				116,
-				45,
-				114,
-				101,
-				99,
-				111,
-				118,
-				101,
-				114,
-				121,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				114,
-				101,
-				99,
-				111,
-				118,
-				101,
-				114,
-				121,
-				10,
-				45,
-				45,
-				119,
-				105,
-				112,
-				101,
-				95,
-				100,
-				97,
-				116,
-				97,
-				10,
-				45,
-				45,
-				114,
-				101,
-				97,
-				115,
-				111,
-				110,
-				61,
-				77,
-				97,
-				115,
-				116,
-				101,
-				114,
-				67,
-				108,
-				101,
-				97,
-				114,
-				67,
-				111,
-				110,
-				102,
-				105,
-				114,
-				109,
-				10,
-				45,
-				45,
-				108,
-				111,
-				99,
-				97,
-				108,
-				101,
-				61,
-				101,
-				110,
-				95,
-				85,
-				83,
-				10,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0
-			};
-			this.misc_mtk = new byte[]
-			{
-				98,
-				111,
-				111,
-				116,
-				45,
-				114,
-				101,
-				99,
-				111,
-				118,
-				101,
-				114,
-				121,
-				108,
-				111,
-				97,
-				100,
-				101,
-				114,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				114,
-				101,
-				99,
-				111,
-				118,
-				101,
-				114,
-				121,
-				10,
-				45,
-				45,
-				119,
-				105,
-				112,
-				101,
-				95,
-				100,
-				97,
-				116,
-				97,
-				10,
-				45,
-				45,
-				114,
-				101,
-				97,
-				115,
-				111,
-				110,
-				61,
-				77,
-				97,
-				115,
-				116,
-				101,
-				114,
-				67,
-				108,
-				101,
-				97,
-				114,
-				67,
-				111,
-				110,
-				102,
-				105,
-				114,
-				109,
-				10,
-				45,
-				45,
-				108,
-				111,
-				99,
-				97,
-				108,
-				101,
-				61,
-				101,
-				110,
-				95,
-				85,
-				83,
-				10,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0
-			};
-			this.InitializeComponent();
-			this.brandsAndModels = new Dictionary<string, List<string>>
-			{
-				{
-					"Apple",
-					new List<string>
-					{
-						"iPhone 11",
-						"iPhone 12",
-						"iPhone 13"
-					}
-				},
-				{
-					"Samsung",
-					new List<string>
-					{
-						"Galaxy S21",
-						"Galaxy S20",
-						"A23"
-					}
-				},
-				{
-					"Huawei",
-					new List<string>
-					{
-						"P30",
-						"P40",
-						"Mate 40"
-					}
-				},
-				{
-					"Xiaomi",
-					new List<string>
-					{
-						"Mi 11",
-						"Redmi Note 10",
-						"Poco X3"
-					}
-				}
-			};
-			this.lstBrands.Items.AddRange(this.brandsAndModels.Keys.ToArray<string>());
-			this.SetPlaceholder();
-		}
-
-		// Token: 0x06000044 RID: 68 RVA: 0x00002B16 File Offset: 0x00000D16
-		private void SetPlaceholder()
-		{
-			this.txtSearch.Text = this.placeholderText;
-			this.txtSearch.ForeColor = Color.Gray;
-		}
-
-		// Token: 0x06000045 RID: 69 RVA: 0x00002B3C File Offset: 0x00000D3C
-		private void txtSearch_GotFocus(object sender, EventArgs e)
-		{
-			bool flag = Operators.CompareString(this.txtSearch.Text, this.placeholderText, false) == 0;
-			if (flag)
-			{
-				this.txtSearch.Text = "";
-				this.txtSearch.ForeColor = Color.Black;
-			}
-		}
-
-		// Token: 0x06000046 RID: 70 RVA: 0x00002B8C File Offset: 0x00000D8C
-		private void txtSearch_LostFocus(object sender, EventArgs e)
-		{
-			bool flag = string.IsNullOrWhiteSpace(this.txtSearch.Text);
-			if (flag)
-			{
-				this.SetPlaceholder();
-			}
-		}
-
-		// Token: 0x06000047 RID: 71 RVA: 0x00002BB8 File Offset: 0x00000DB8
-		private void txtSearch_TextChanged(object sender, EventArgs e)
-		{
-			Form1._Closure$__30-0 CS$<>8__locals1 = new Form1._Closure$__30-0(CS$<>8__locals1);
-			bool flag = Operators.CompareString(this.txtSearch.Text, this.placeholderText, false) == 0;
-			if (!flag)
-			{
-				CS$<>8__locals1.$VB$Local_searchQuery = this.txtSearch.Text.ToLower();
-				Dictionary<string, List<string>> dictionary = new Dictionary<string, List<string>>();
-				try
-				{
-					foreach (KeyValuePair<string, List<string>> keyValuePair in this.brandsAndModels)
-					{
-						List<string> list = keyValuePair.Value.Where((CS$<>8__locals1.$I0 == null) ? (CS$<>8__locals1.$I0 = ((string model) => model.ToLower().Contains(CS$<>8__locals1.$VB$Local_searchQuery))) : CS$<>8__locals1.$I0).ToList<string>();
-						bool flag2 = keyValuePair.Key.ToLower().Contains(CS$<>8__locals1.$VB$Local_searchQuery) || list.Count > 0;
-						if (flag2)
-						{
-							dictionary.Add(keyValuePair.Key, list);
-						}
-					}
-				}
-				finally
-				{
-					Dictionary<string, List<string>>.Enumerator enumerator;
-					((IDisposable)enumerator).Dispose();
-				}
-				this.lstBrands.Items.Clear();
-				this.lstBrands.Items.AddRange(dictionary.Keys.ToArray<string>());
-				this.lstModels.Items.Clear();
-				try
-				{
-					foreach (KeyValuePair<string, List<string>> keyValuePair2 in dictionary)
-					{
-						this.lstModels.Items.Add(keyValuePair2.Key + ":");
-						this.lstModels.Items.AddRange(keyValuePair2.Value.ToArray());
-					}
-				}
-				finally
-				{
-					Dictionary<string, List<string>>.Enumerator enumerator2;
-					((IDisposable)enumerator2).Dispose();
-				}
-			}
-		}
-
-		// Token: 0x06000048 RID: 72 RVA: 0x00002D8C File Offset: 0x00000F8C
-		private void lstBrands_SelectedIndexChanged(object sender, EventArgs e)
-		{
-			bool flag = this.lstBrands.SelectedItem != null;
-			if (flag)
-			{
-				string key = this.lstBrands.SelectedItem.ToString();
-				bool flag2 = this.brandsAndModels.ContainsKey(key);
-				if (flag2)
-				{
-					this.lstModels.Items.Clear();
-					this.lstModels.Items.AddRange(this.brandsAndModels[key].ToArray());
-				}
-			}
-		}
-
-		// Token: 0x06000049 RID: 73 RVA: 0x00002E04 File Offset: 0x00001004
+		// Token: 0x06000037 RID: 55 RVA: 0x00002FAC File Offset: 0x000011AC
 		private void btnReadAdb_Click(object sender, EventArgs e)
 		{
 			try
@@ -808,7 +73,7 @@ namespace Tstool
 					this.txtOutput.AppendText(string.Format("model: {0}", text2));
 					this.txtOutput.AppendText(string.Format("SN: {0}", arg2));
 					this.txtOutput.AppendText(string.Format("Android: {0}", arg4));
-					this.txtOutput.AppendText(string.Format("Security: {0}", arg3));
+					this.txtOutput.AppendText(string.Format("Parche: {0}", arg3));
 					this.txtOutput.AppendText(string.Format("Baseband: {0}", arg5));
 					this.txtOutput.AppendText(string.Format("SIM: {0}", arg7));
 					this.txtOutput.AppendText(string.Format("Hardware: {0}", arg6));
@@ -843,7 +108,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600004A RID: 74 RVA: 0x00003188 File Offset: 0x00001388
+		// Token: 0x06000038 RID: 56 RVA: 0x00003330 File Offset: 0x00001530
 		private string ExecuteAdbCommand(string command, string device)
 		{
 			Process process = new Process();
@@ -858,7 +123,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x0600004B RID: 75 RVA: 0x0000320C File Offset: 0x0000140C
+		// Token: 0x06000039 RID: 57 RVA: 0x000033B4 File Offset: 0x000015B4
 		private List<string> GetAdbDevices()
 		{
 			Process process = new Process();
@@ -886,7 +151,7 @@ namespace Tstool
 			return list;
 		}
 
-		// Token: 0x0600004C RID: 76 RVA: 0x0000330C File Offset: 0x0000150C
+		// Token: 0x0600003A RID: 58 RVA: 0x000034B4 File Offset: 0x000016B4
 		private void UpdateDeviceList()
 		{
 			List<string> adbDevices = this.GetAdbDevices();
@@ -904,19 +169,19 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600004D RID: 77 RVA: 0x0000338B File Offset: 0x0000158B
+		// Token: 0x0600003B RID: 59 RVA: 0x00003533 File Offset: 0x00001733
 		private void cmbDevicesAdb_DropDown(object sender, EventArgs e)
 		{
 			this.UpdateDeviceList();
 		}
 
-		// Token: 0x0600004E RID: 78 RVA: 0x00003395 File Offset: 0x00001595
+		// Token: 0x0600003C RID: 60 RVA: 0x0000353D File Offset: 0x0000173D
 		private void OnTimedEvent(object source, ElapsedEventArgs e)
 		{
 			base.Invoke(new MethodInvoker(this.UpdateDeviceList));
 		}
 
-		// Token: 0x0600004F RID: 79 RVA: 0x000033AC File Offset: 0x000015AC
+		// Token: 0x0600003D RID: 61 RVA: 0x00003554 File Offset: 0x00001754
 		private void btnReadComSm_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -970,7 +235,7 @@ namespace Tstool
 						finally
 						{
 							this.processRunning = false;
-							this.AplicarPermisosDesdeFirebasePorPlan();
+							this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 							this.btnCancelarProceso.Enabled = false;
 						}
 					});
@@ -978,7 +243,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000050 RID: 80 RVA: 0x00003460 File Offset: 0x00001660
+		// Token: 0x0600003E RID: 62 RVA: 0x00003608 File Offset: 0x00001808
 		private string LeerInformacionSamsungDesdeCOM(string puertoCom)
 		{
 			string result;
@@ -1009,7 +274,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000051 RID: 81 RVA: 0x0000355C File Offset: 0x0000175C
+		// Token: 0x0600003F RID: 63 RVA: 0x00003704 File Offset: 0x00001904
 		private string SendAtCommand(string command, int timeoutMs = 3000)
 		{
 			string result;
@@ -1048,7 +313,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000052 RID: 82 RVA: 0x00003690 File Offset: 0x00001890
+		// Token: 0x06000040 RID: 64 RVA: 0x00003838 File Offset: 0x00001A38
 		private void ProcessAndDisplayDeviceInfo(string deviceInfo)
 		{
 			string text = this.ExtractValue(deviceInfo, "MN(", ")");
@@ -1098,7 +363,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000053 RID: 83 RVA: 0x000039A0 File Offset: 0x00001BA0
+		// Token: 0x06000041 RID: 65 RVA: 0x00003B48 File Offset: 0x00001D48
 		private string ObtenerBitDesdeCadenaBL(string bl)
 		{
 			bool flag = !string.IsNullOrEmpty(bl) && bl.Length >= 5;
@@ -1114,7 +379,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000054 RID: 84 RVA: 0x000039E8 File Offset: 0x00001BE8
+		// Token: 0x06000042 RID: 66 RVA: 0x00003B90 File Offset: 0x00001D90
 		private string ExtractValue(string deviceInfo, string key, string endKey)
 		{
 			int num = deviceInfo.IndexOf(key);
@@ -1144,7 +409,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000055 RID: 85 RVA: 0x00003A48 File Offset: 0x00001C48
+		// Token: 0x06000043 RID: 67 RVA: 0x00003BF0 File Offset: 0x00001DF0
 		private Dictionary<string, string> ParseFirmwareParts(string firmwareVer)
 		{
 			Dictionary<string, string> dictionary = new Dictionary<string, string>();
@@ -1170,7 +435,7 @@ namespace Tstool
 			return dictionary;
 		}
 
-		// Token: 0x06000056 RID: 86 RVA: 0x00003B04 File Offset: 0x00001D04
+		// Token: 0x06000044 RID: 68 RVA: 0x00003CAC File Offset: 0x00001EAC
 		private string CleanResponse(string response, string command)
 		{
 			response = response.Replace(command, "");
@@ -1178,7 +443,7 @@ namespace Tstool
 			return response;
 		}
 
-		// Token: 0x06000057 RID: 87 RVA: 0x00003B5C File Offset: 0x00001D5C
+		// Token: 0x06000045 RID: 69 RVA: 0x00003D04 File Offset: 0x00001F04
 		private void UpdateComPortList()
 		{
 			string[] portNames = SerialPort.GetPortNames();
@@ -1217,7 +482,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000058 RID: 88 RVA: 0x00003C98 File Offset: 0x00001E98
+		// Token: 0x06000046 RID: 70 RVA: 0x00003E40 File Offset: 0x00002040
 		private string GetPortDescription(string port)
 		{
 			try
@@ -1280,19 +545,19 @@ namespace Tstool
 			return null;
 		}
 
-		// Token: 0x06000059 RID: 89 RVA: 0x00003F2C File Offset: 0x0000212C
+		// Token: 0x06000047 RID: 71 RVA: 0x000040D4 File Offset: 0x000022D4
 		private void cmbPuertos_DropDown(object sender, EventArgs e)
 		{
 			this.UpdateComPortList();
 		}
 
-		// Token: 0x0600005A RID: 90 RVA: 0x00003F38 File Offset: 0x00002138
+		// Token: 0x06000048 RID: 72 RVA: 0x000040E0 File Offset: 0x000022E0
 		private async void btnactatadb_Click(object sender, EventArgs e)
 		{
 			await this.ActivarAtaAdbAsync();
 		}
 
-		// Token: 0x0600005B RID: 91 RVA: 0x00003F80 File Offset: 0x00002180
+		// Token: 0x06000049 RID: 73 RVA: 0x00004128 File Offset: 0x00002328
 		private async Task ActivarAtaAdbAsync()
 		{
 			this.UpdateComPortList();
@@ -1390,17 +655,17 @@ namespace Tstool
 					finally
 					{
 						this.processRunning = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 						this.btnCancelarProceso.Enabled = false;
 					}
 				});
 				this.processRunning = false;
 				this.btnCancelarProceso.Enabled = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 			}
 		}
 
-		// Token: 0x0600005C RID: 92 RVA: 0x00003FC4 File Offset: 0x000021C4
+		// Token: 0x0600004A RID: 74 RVA: 0x0000416C File Offset: 0x0000236C
 		private void ExecuteAdbDevices()
 		{
 			try
@@ -1426,7 +691,7 @@ namespace Tstool
 					string text15 = this.ExecuteAdbCommand("shell getprop ro.boot.carrierid", device);
 					this.txtOutput.Clear();
 					this.ActualizarProgreso();
-					this.txtOutput.Text = string.Format("- Connecting ... {0}Marca: {1}Model: {2}SN: {3}Android: {4}Security: {5}Baseband: {6}SIM: {7}Hardware: {8}carrierid: {9}IMEI: {10}Carrier: {11} ", new object[]
+					this.txtOutput.Text = string.Format("- Connecting ... {0}Marca: {1}Model: {2}SN: {3}Android: {4}Parche: {5}Baseband: {6}SIM: {7}Hardware: {8}carrierid: {9}IMEI: {10}Carrier: {11} ", new object[]
 					{
 						text2,
 						text,
@@ -1457,7 +722,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600005D RID: 93 RVA: 0x000041E8 File Offset: 0x000023E8
+		// Token: 0x0600004B RID: 75 RVA: 0x00004390 File Offset: 0x00002590
 		private void ActualizarProgreso()
 		{
 			bool flag = this.ProgressBar1.Value < this.ProgressBar1.Maximum;
@@ -1468,7 +733,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600005E RID: 94 RVA: 0x0000422C File Offset: 0x0000242C
+		// Token: 0x0600004C RID: 76 RVA: 0x000043D4 File Offset: 0x000025D4
 		private void GuardarEnArchivo(string nombreDirectorio, string contenido)
 		{
 			try
@@ -1496,14 +761,14 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600005F RID: 95 RVA: 0x0000430C File Offset: 0x0000250C
+		// Token: 0x0600004D RID: 77 RVA: 0x000044B4 File Offset: 0x000026B4
 		private string SendAtCommand2(string command)
 		{
 			this.SerialPort1.WriteLine(command);
 			return this.SerialPort1.ReadLine();
 		}
 
-		// Token: 0x06000060 RID: 96 RVA: 0x00004338 File Offset: 0x00002538
+		// Token: 0x0600004E RID: 78 RVA: 0x000044E0 File Offset: 0x000026E0
 		private void ProcessAndDisplayInfo(string commandResponse, string stepDescription)
 		{
 			TextBox textBox;
@@ -1519,7 +784,7 @@ namespace Tstool
 			(txtOutput = this.txtOutput).Text = txtOutput.Text + stepDescription + " ok" + Environment.NewLine;
 		}
 
-		// Token: 0x06000061 RID: 97 RVA: 0x000043A4 File Offset: 0x000025A4
+		// Token: 0x0600004F RID: 79 RVA: 0x0000454C File Offset: 0x0000274C
 		private bool ExecuteAndWaitAdbCommand()
 		{
 			string commandResponse = this.ExecuteAdbCommand2("adb shell getprop ro.product.manufacturer");
@@ -1546,7 +811,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000062 RID: 98 RVA: 0x00004460 File Offset: 0x00002660
+		// Token: 0x06000050 RID: 80 RVA: 0x00004608 File Offset: 0x00002808
 		private bool ExecuteAndWaitAdbCommand2()
 		{
 			string text = this.ExecuteAdbCommand2("adb shell getprop ro.product.manufacturer");
@@ -1575,7 +840,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000063 RID: 99 RVA: 0x00004558 File Offset: 0x00002758
+		// Token: 0x06000051 RID: 81 RVA: 0x00004700 File Offset: 0x00002900
 		private string ExecuteAdbCommand2(string command)
 		{
 			string result;
@@ -1603,7 +868,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000064 RID: 100 RVA: 0x00004624 File Offset: 0x00002824
+		// Token: 0x06000052 RID: 82 RVA: 0x000047CC File Offset: 0x000029CC
 		private void SendAtAdb()
 		{
 			string commandResponse = this.SendAtCommand("AT+SWATD=0", 3000);
@@ -1619,7 +884,7 @@ namespace Tstool
 			(txtOutput = this.txtOutput).Text = txtOutput.Text + "Esperando AdbDevices For Xploit 2" + Environment.NewLine;
 		}
 
-		// Token: 0x06000065 RID: 101 RVA: 0x000046F4 File Offset: 0x000028F4
+		// Token: 0x06000053 RID: 83 RVA: 0x0000489C File Offset: 0x00002A9C
 		private bool ExeCheckAdb()
 		{
 			string commandResponse = this.ExecuteAdbCommand2("adb shell getprop ro.boot.serialno");
@@ -1641,7 +906,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000066 RID: 102 RVA: 0x0000476D File Offset: 0x0000296D
+		// Token: 0x06000054 RID: 84 RVA: 0x00004915 File Offset: 0x00002B15
 		private void InitializeProgressBar(int maximumValue)
 		{
 			this.ProgressBar1.Minimum = 0;
@@ -1649,7 +914,7 @@ namespace Tstool
 			this.ProgressBar1.Value = 0;
 		}
 
-		// Token: 0x06000067 RID: 103 RVA: 0x00004798 File Offset: 0x00002998
+		// Token: 0x06000055 RID: 85 RVA: 0x00004940 File Offset: 0x00002B40
 		private void UpdateProgressBar()
 		{
 			bool flag = this.ProgressBar1.Value < this.ProgressBar1.Maximum;
@@ -1660,7 +925,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000068 RID: 104 RVA: 0x000047DC File Offset: 0x000029DC
+		// Token: 0x06000056 RID: 86 RVA: 0x00004984 File Offset: 0x00002B84
 		private async void btnInstallITadmin_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -1773,7 +1038,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000069 RID: 105 RVA: 0x00004824 File Offset: 0x00002A24
+		// Token: 0x06000057 RID: 87 RVA: 0x000049CC File Offset: 0x00002BCC
 		private void btnFixITadmin_Click_(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -1833,10 +1098,10 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600006A RID: 106 RVA: 0x00004AD4 File Offset: 0x00002CD4
+		// Token: 0x06000058 RID: 88 RVA: 0x00004C7C File Offset: 0x00002E7C
 		private async Task RemovePayNewAsync()
 		{
-			Form1._Closure$__65-1 CS$<>8__locals1 = new Form1._Closure$__65-1(CS$<>8__locals1);
+			Form1._Closure$__64-1 CS$<>8__locals1 = new Form1._Closure$__64-1(CS$<>8__locals1);
 			CS$<>8__locals1.$VB$Me = this;
 			bool flag = this.processRunning;
 			if (flag)
@@ -1861,7 +1126,7 @@ namespace Tstool
 				{
 					try
 					{
-						Form1._Closure$__65-0 CS$<>8__locals2 = new Form1._Closure$__65-0(CS$<>8__locals2);
+						Form1._Closure$__64-0 CS$<>8__locals2 = new Form1._Closure$__64-0(CS$<>8__locals2);
 						CS$<>8__locals2.$VB$NonLocal_$VB$Closure_2 = CS$<>8__locals1;
 						List<string> adbDevices = CS$<>8__locals1.$VB$Me.GetAdbDevices();
 						bool flag2 = adbDevices.Count == 0;
@@ -1954,9 +1219,9 @@ namespace Tstool
 											"shell dumpsys package com.payjoy.access"
 										}
 									};
-									Form1._Closure$__65-2 CS$<>8__locals3 = new Form1._Closure$__65-2(CS$<>8__locals3);
+									Form1._Closure$__64-2 CS$<>8__locals3 = new Form1._Closure$__64-2(CS$<>8__locals3);
 									CS$<>8__locals3.$VB$NonLocal_$VB$Closure_3 = CS$<>8__locals2;
-									Form1._Closure$__65-2 CS$<>8__locals4 = CS$<>8__locals3;
+									Form1._Closure$__64-2 CS$<>8__locals4 = CS$<>8__locals3;
 									int num = list.Count - 1;
 									CS$<>8__locals4.$VB$Local_paso = 0;
 									while (CS$<>8__locals3.$VB$Local_paso <= num)
@@ -2003,7 +1268,7 @@ namespace Tstool
 					finally
 					{
 						CS$<>8__locals1.$VB$Me.processRunning = false;
-						CS$<>8__locals1.$VB$Me.AplicarPermisosDesdeFirebasePorPlan();
+						CS$<>8__locals1.$VB$Me.AplicarPermisosDesdeFirebase(CS$<>8__locals1.$VB$Me.permisosUsuario);
 						CS$<>8__locals1.$VB$Me.btnCancelarProceso.Enabled = false;
 					}
 				}), CS$<>8__locals1.$VB$Local_token);
@@ -2020,26 +1285,26 @@ namespace Tstool
 				}
 				this.processRunning = false;
 				this.btnCancelarProceso.Enabled = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 			}
 		}
 
-		// Token: 0x0600006B RID: 107 RVA: 0x00004B18 File Offset: 0x00002D18
+		// Token: 0x06000059 RID: 89 RVA: 0x00004CC0 File Offset: 0x00002EC0
 		private async void btnRemovePayNew_Click(object sender, EventArgs e)
 		{
 			await this.RemovePayNewAsync();
 		}
 
-		// Token: 0x0600006C RID: 108 RVA: 0x00004B60 File Offset: 0x00002D60
+		// Token: 0x0600005A RID: 90 RVA: 0x00004D08 File Offset: 0x00002F08
 		private async void btnRemovePayOld_Click(object sender, EventArgs e)
 		{
 			await this.RemovePayOldAsync();
 		}
 
-		// Token: 0x0600006D RID: 109 RVA: 0x00004BA8 File Offset: 0x00002DA8
+		// Token: 0x0600005B RID: 91 RVA: 0x00004D50 File Offset: 0x00002F50
 		private async Task RemovePayOldAsync()
 		{
-			Form1._Closure$__68-1 CS$<>8__locals1 = new Form1._Closure$__68-1(CS$<>8__locals1);
+			Form1._Closure$__67-1 CS$<>8__locals1 = new Form1._Closure$__67-1(CS$<>8__locals1);
 			CS$<>8__locals1.$VB$Me = this;
 			bool flag = this.processRunning;
 			if (flag)
@@ -2061,7 +1326,7 @@ namespace Tstool
 				{
 					try
 					{
-						Form1._Closure$__68-0 CS$<>8__locals2 = new Form1._Closure$__68-0(CS$<>8__locals2);
+						Form1._Closure$__67-0 CS$<>8__locals2 = new Form1._Closure$__67-0(CS$<>8__locals2);
 						CS$<>8__locals2.$VB$NonLocal_$VB$Closure_2 = CS$<>8__locals1;
 						List<string> adbDevices = CS$<>8__locals1.$VB$Me.GetAdbDevices();
 						bool flag2 = adbDevices.Count == 0;
@@ -2129,7 +1394,7 @@ namespace Tstool
 					finally
 					{
 						CS$<>8__locals1.$VB$Me.processRunning = false;
-						CS$<>8__locals1.$VB$Me.AplicarPermisosDesdeFirebasePorPlan();
+						CS$<>8__locals1.$VB$Me.AplicarPermisosDesdeFirebase(CS$<>8__locals1.$VB$Me.permisosUsuario);
 						CS$<>8__locals1.$VB$Me.btnCancelarProceso.Enabled = false;
 					}
 				}, CS$<>8__locals1.$VB$Local_token);
@@ -2146,11 +1411,11 @@ namespace Tstool
 				}
 				this.processRunning = false;
 				this.btnCancelarProceso.Enabled = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 			}
 		}
 
-		// Token: 0x0600006E RID: 110 RVA: 0x00004BEC File Offset: 0x00002DEC
+		// Token: 0x0600005C RID: 92 RVA: 0x00004D94 File Offset: 0x00002F94
 		private async Task RemoverFRPAsync()
 		{
 			bool flag = this.processRunning;
@@ -2236,7 +1501,7 @@ namespace Tstool
 					finally
 					{
 						this.processRunning = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 						this.btnCancelarProceso.Enabled = false;
 					}
 				}, token);
@@ -2253,11 +1518,11 @@ namespace Tstool
 				}
 				this.processRunning = false;
 				this.btnCancelarProceso.Enabled = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 			}
 		}
 
-		// Token: 0x0600006F RID: 111 RVA: 0x00004C30 File Offset: 0x00002E30
+		// Token: 0x0600005D RID: 93 RVA: 0x00004DD8 File Offset: 0x00002FD8
 		private void btnMsjTelcelOld_Click(object sender, EventArgs e)
 		{
 			this.txtOutput.Clear();
@@ -2302,21 +1567,21 @@ namespace Tstool
 			finally
 			{
 				this.processRunning = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				this.btnCancelarProceso.Enabled = false;
 			}
 		}
 
-		// Token: 0x06000070 RID: 112 RVA: 0x00004E4C File Offset: 0x0000304C
+		// Token: 0x0600005E RID: 94 RVA: 0x00004FFC File Offset: 0x000031FC
 		private async void btnMsjTelcelNew_Click(object sender, EventArgs e)
 		{
 			await this.RemoveMensajeTelcelNewAsync();
 		}
 
-		// Token: 0x06000071 RID: 113 RVA: 0x00004E94 File Offset: 0x00003094
+		// Token: 0x0600005F RID: 95 RVA: 0x00005044 File Offset: 0x00003244
 		private async Task RemoveMensajeTelcelNewAsync()
 		{
-			Form1._Closure$__72-1 CS$<>8__locals1 = new Form1._Closure$__72-1(CS$<>8__locals1);
+			Form1._Closure$__71-1 CS$<>8__locals1 = new Form1._Closure$__71-1(CS$<>8__locals1);
 			CS$<>8__locals1.$VB$Me = this;
 			bool flag = this.processRunning;
 			if (flag)
@@ -2341,7 +1606,7 @@ namespace Tstool
 				{
 					try
 					{
-						Form1._Closure$__72-0 CS$<>8__locals2 = new Form1._Closure$__72-0(CS$<>8__locals2);
+						Form1._Closure$__71-0 CS$<>8__locals2 = new Form1._Closure$__71-0(CS$<>8__locals2);
 						CS$<>8__locals2.$VB$NonLocal_$VB$Closure_2 = CS$<>8__locals1;
 						List<string> adbDevices = CS$<>8__locals1.$VB$Me.GetAdbDevices();
 						bool flag2 = adbDevices.Count == 0;
@@ -2392,14 +1657,7 @@ namespace Tstool
 										"shell pm disable-user --user 0 com.samsung.android.game.gamehome",
 										"shell pm disable com.samsung.android.game.gamehome",
 										"shell pm uninstall -k --user 0 com.samsung.android.game.gamehome",
-										"shell pm uninstall --user 0 com.samsung.android.game.gamehomec",
-										"shell pm uninstall --user 0 com.samsung.android.game.gamehomec",
-										"shell am crash co.sitic.pp",
-										"shell pm suspend co.sitic.pp",
-										"shell am kill co.sitic.pp",
-										"shell am set-inactive co.sitic.pp",
-										"shell pm uninstall --user 0 co.sitic.pp",
-										"shell pm disable-user --user 0 co.sitic.pp"
+										"shell pm uninstall --user 0 com.samsung.android.game.gamehomec"
 									};
 									foreach (string command in array)
 									{
@@ -2424,7 +1682,7 @@ namespace Tstool
 					finally
 					{
 						CS$<>8__locals1.$VB$Me.processRunning = false;
-						CS$<>8__locals1.$VB$Me.AplicarPermisosDesdeFirebasePorPlan();
+						CS$<>8__locals1.$VB$Me.AplicarPermisosDesdeFirebase(CS$<>8__locals1.$VB$Me.permisosUsuario);
 						CS$<>8__locals1.$VB$Me.btnCancelarProceso.Enabled = false;
 					}
 				}, CS$<>8__locals1.$VB$Local_token);
@@ -2441,11 +1699,11 @@ namespace Tstool
 				}
 				this.processRunning = false;
 				this.btnCancelarProceso.Enabled = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 			}
 		}
 
-		// Token: 0x06000072 RID: 114 RVA: 0x00004ED8 File Offset: 0x000030D8
+		// Token: 0x06000060 RID: 96 RVA: 0x00005088 File Offset: 0x00003288
 		private void btnKnox_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -2469,7 +1727,7 @@ namespace Tstool
 				{
 					try
 					{
-						Form1._Closure$__73-0 CS$<>8__locals1 = new Form1._Closure$__73-0(CS$<>8__locals1);
+						Form1._Closure$__72-0 CS$<>8__locals1 = new Form1._Closure$__72-0(CS$<>8__locals1);
 						CS$<>8__locals1.$VB$Me = this;
 						List<string> adbDevices = this.GetAdbDevices();
 						bool flag2 = adbDevices.Count == 0 || this.cmbDevicesAdb.Invoke(new VB$AnonymousDelegate_1<object>(() => this.cmbDevicesAdb.SelectedItem)) == null;
@@ -2595,7 +1853,7 @@ namespace Tstool
 								List<ValueTuple<string, List<string>>>.Enumerator enumerator = list.GetEnumerator();
 								while (enumerator.MoveNext())
 								{
-									Form1._Closure$__73-1 CS$<>8__locals2 = new Form1._Closure$__73-1(CS$<>8__locals2);
+									Form1._Closure$__72-1 CS$<>8__locals2 = new Form1._Closure$__72-1(CS$<>8__locals2);
 									CS$<>8__locals2.$VB$NonLocal_$VB$Closure_2 = CS$<>8__locals1;
 									CS$<>8__locals2.$VB$Local_paso = enumerator.Current;
 									try
@@ -2639,14 +1897,14 @@ namespace Tstool
 					finally
 					{
 						this.processRunning = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 						this.btnCancelarProceso.Enabled = false;
 					}
 				});
 			}
 		}
 
-		// Token: 0x06000073 RID: 115 RVA: 0x00004F54 File Offset: 0x00003154
+		// Token: 0x06000061 RID: 97 RVA: 0x00005104 File Offset: 0x00003304
 		private void ShowQRWindow(string qrImageUrl)
 		{
 			try
@@ -2679,7 +1937,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000074 RID: 116 RVA: 0x00005044 File Offset: 0x00003244
+		// Token: 0x06000062 RID: 98 RVA: 0x000051F4 File Offset: 0x000033F4
 		private void btnQRFRP_Click_(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -2703,7 +1961,7 @@ namespace Tstool
 				{
 					try
 					{
-						Form1._Closure$__75-1 CS$<>8__locals1 = new Form1._Closure$__75-1(CS$<>8__locals1);
+						Form1._Closure$__74-1 CS$<>8__locals1 = new Form1._Closure$__74-1(CS$<>8__locals1);
 						CS$<>8__locals1.$VB$Me = this;
 						this.txtOutput.Invoke(new VB$AnonymousDelegate_0(delegate()
 						{
@@ -2721,9 +1979,9 @@ namespace Tstool
 						}));
 						string value = "";
 						CS$<>8__locals1.$VB$Local_maxAttempts = 6;
-						Form1._Closure$__75-0 CS$<>8__locals2 = new Form1._Closure$__75-0(CS$<>8__locals2);
+						Form1._Closure$__74-0 CS$<>8__locals2 = new Form1._Closure$__74-0(CS$<>8__locals2);
 						CS$<>8__locals2.$VB$NonLocal_$VB$Closure_2 = CS$<>8__locals1;
-						Form1._Closure$__75-0 CS$<>8__locals3 = CS$<>8__locals2;
+						Form1._Closure$__74-0 CS$<>8__locals3 = CS$<>8__locals2;
 						int $VB$Local_maxAttempts = CS$<>8__locals2.$VB$NonLocal_$VB$Closure_2.$VB$Local_maxAttempts;
 						CS$<>8__locals3.$VB$Local_i = 1;
 						while (CS$<>8__locals2.$VB$Local_i <= $VB$Local_maxAttempts)
@@ -2788,20 +2046,20 @@ namespace Tstool
 					finally
 					{
 						this.processRunning = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 						this.btnCancelarProceso.Enabled = false;
 					}
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				}));
 				this.processRunning = false;
 				this.btnCancelarProceso.Enabled = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 			}
 		}
 
-		// Token: 0x06000075 RID: 117 RVA: 0x000050DC File Offset: 0x000032DC
+		// Token: 0x06000063 RID: 99 RVA: 0x00005290 File Offset: 0x00003490
 		private void ExecuteKnox(string selectedDevice, int totalSteps)
 		{
 			try
@@ -2918,7 +2176,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000076 RID: 118 RVA: 0x00005610 File Offset: 0x00003810
+		// Token: 0x06000064 RID: 100 RVA: 0x000057C4 File Offset: 0x000039C4
 		private void btnPlayOriginal_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -2974,7 +2232,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000077 RID: 119 RVA: 0x0000579C File Offset: 0x0000399C
+		// Token: 0x06000065 RID: 101 RVA: 0x00005950 File Offset: 0x00003B50
 		private async void btnitadminall_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -3056,7 +2314,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000078 RID: 120 RVA: 0x000057E4 File Offset: 0x000039E4
+		// Token: 0x06000066 RID: 102 RVA: 0x00005998 File Offset: 0x00003B98
 		private void btnXploitZ_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -3071,7 +2329,6 @@ namespace Tstool
 				this.SetAllButtonsEnabled(false, null);
 				this.btnCancelarProceso.Enabled = true;
 				this.VerificarEntornoSeguro();
-				this.ListView1.Visible = false;
 				this.txtOutput.Clear();
 				this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
 				{
@@ -3162,18 +2419,18 @@ namespace Tstool
 					finally
 					{
 						this.processRunning = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 						this.btnCancelarProceso.Enabled = false;
 					}
 					Task tareaTimeout = Task.Delay(50000);
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				});
 			}
 		}
 
-		// Token: 0x06000079 RID: 121 RVA: 0x00005878 File Offset: 0x00003A78
+		// Token: 0x06000067 RID: 103 RVA: 0x00005A20 File Offset: 0x00003C20
 		private async Task<bool> DownloadFileSimple(string url, string destinoArchivo)
 		{
 			bool result;
@@ -3205,7 +2462,7 @@ namespace Tstool
 							{
 								this.txtOutput.Invoke(new VB$AnonymousDelegate_0(delegate()
 								{
-									this.txtOutput.AppendText("⚠️ Archivo descargado sin verificación MD5: " + Environment.NewLine);
+									this.txtOutput.AppendText("⚠️ Archivo descargado sin verificación MD5: " + nombreArchivo + Environment.NewLine);
 								}));
 								return true;
 							}
@@ -3253,7 +2510,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x0600007A RID: 122 RVA: 0x000058CC File Offset: 0x00003ACC
+		// Token: 0x06000068 RID: 104 RVA: 0x00005A74 File Offset: 0x00003C74
 		private void MostrarOpciones()
 		{
 			this.ListView1.Items.Clear();
@@ -3266,7 +2523,7 @@ namespace Tstool
 			this.ListView1.Visible = true;
 		}
 
-		// Token: 0x0600007B RID: 123 RVA: 0x0000599C File Offset: 0x00003B9C
+		// Token: 0x06000069 RID: 105 RVA: 0x00005B44 File Offset: 0x00003D44
 		private string ExecuteCommand(string command)
 		{
 			string result;
@@ -3297,7 +2554,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x0600007C RID: 124 RVA: 0x00005A8C File Offset: 0x00003C8C
+		// Token: 0x0600006A RID: 106 RVA: 0x00005C34 File Offset: 0x00003E34
 		private void btncheckport_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -3308,7 +2565,7 @@ namespace Tstool
 			}
 			else
 			{
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				this.cmbDevices.Items.Clear();
 				this.cmbDevices.Enabled = true;
 				this.txtOutput.Clear();
@@ -3316,7 +2573,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600007D RID: 125 RVA: 0x00005AFC File Offset: 0x00003CFC
+		// Token: 0x0600006B RID: 107 RVA: 0x00005CA8 File Offset: 0x00003EA8
 		private async void cmbDevices_SelectedIndexChanged(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -3340,10 +2597,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600007E RID: 126 RVA: 0x00005B44 File Offset: 0x00003D44
+		// Token: 0x0600006C RID: 108 RVA: 0x00005CF0 File Offset: 0x00003EF0
 		private async void btnReadFastboot_Click(object sender, EventArgs e)
 		{
-			this.SetAllButtonsEnabled(false, null);
 			this.txtOutput.Clear();
 			this.cmbDevices.Items.Clear();
 			List<string> devices = await Task.Run<List<string>>(() => this.GetFastbootDevices());
@@ -3384,12 +2640,12 @@ namespace Tstool
 				this.btnCancelarProceso.Enabled = false;
 				this.Invoke(new VB$AnonymousDelegate_0(delegate()
 				{
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				}));
 			}
 		}
 
-		// Token: 0x0600007F RID: 127 RVA: 0x00005B8C File Offset: 0x00003D8C
+		// Token: 0x0600006D RID: 109 RVA: 0x00005D38 File Offset: 0x00003F38
 		private List<string> GetFastbootDevices()
 		{
 			List<string> list = new List<string>();
@@ -3418,7 +2674,7 @@ namespace Tstool
 			}
 			catch (Exception ex)
 			{
-				Form1._Closure$__86-0 CS$<>8__locals1 = new Form1._Closure$__86-0(CS$<>8__locals1);
+				Form1._Closure$__85-0 CS$<>8__locals1 = new Form1._Closure$__85-0(CS$<>8__locals1);
 				CS$<>8__locals1.$VB$Me = this;
 				Exception $VB$Local_ex = ex;
 				CS$<>8__locals1.$VB$Local_ex = $VB$Local_ex;
@@ -3430,38 +2686,37 @@ namespace Tstool
 			return list;
 		}
 
-		// Token: 0x06000080 RID: 128 RVA: 0x00005C7C File Offset: 0x00003E7C
+		// Token: 0x0600006E RID: 110 RVA: 0x00005E28 File Offset: 0x00004028
 		private void ReadFastbootDeviceInfo(string device)
 		{
-			base.Invoke((Form1._Closure$__.$I87-0 == null) ? (Form1._Closure$__.$I87-0 = delegate()
+			base.Invoke(new VB$AnonymousDelegate_0(delegate()
 			{
-			}) : Form1._Closure$__.$I87-0);
+				this.txtOutput.Clear();
+			}));
 			Dictionary<string, string> fastbootInfo = this.GetFastbootInfo();
 			base.Invoke(new VB$AnonymousDelegate_0(delegate()
 			{
 				this.txtOutput.Clear();
-				this.txtOutput.AppendText(string.Format("Process: {0}{1}", "Read Info Motorola Fastboot", Environment.NewLine));
-				this.txtOutput.AppendText(string.Format("Brand: {0}{1}", "Motorola", Environment.NewLine));
-				this.txtOutput.AppendText(string.Format("SN: {0}{1}", fastbootInfo["serialno"], Environment.NewLine));
-				this.txtOutput.AppendText(string.Format("Codename: {0}{1}", fastbootInfo["product"], Environment.NewLine));
-				this.txtOutput.AppendText(string.Format("Model: {0}{1}", fastbootInfo["sku"], Environment.NewLine));
-				this.txtOutput.AppendText(string.Format("Carrier ID: {0}{1}", fastbootInfo["ro.carrier"], Environment.NewLine));
-				this.txtOutput.AppendText(string.Format("IMEI: {0}{1}", fastbootInfo["imei"], Environment.NewLine));
-				this.txtOutput.AppendText(string.Format("Bootloader Lock: {0}{1}", fastbootInfo["securestate"], Environment.NewLine));
-				this.txtOutput.AppendText(string.Format("Slot SIM: {0}{1}", fastbootInfo["slot-count"], Environment.NewLine));
+				this.txtOutput.AppendText(string.Format("Code name: {0}{1}", fastbootInfo["product"], Environment.NewLine));
+				this.txtOutput.AppendText(string.Format("Serial Number: {0}{1}", fastbootInfo["serialno"], Environment.NewLine));
 				this.txtOutput.AppendText(string.Format("Memory Type: {0}{1}", fastbootInfo["storage-type"], Environment.NewLine));
-				this.txtOutput.AppendText(string.Format("Cpu: {0}{1}", fastbootInfo["cpu"], Environment.NewLine));
+				this.txtOutput.AppendText(string.Format("Bootloader Lock: {0}{1}", fastbootInfo["unlocked"], Environment.NewLine));
+				this.txtOutput.AppendText(string.Format("Carrier ID: {0}{1}", fastbootInfo["ro.carrier"], Environment.NewLine));
+				this.txtOutput.AppendText(string.Format("Slot SIM: {0}{1}", fastbootInfo["slot-count"], Environment.NewLine));
+				this.txtOutput.AppendText(string.Format("Model: {0}{1}", fastbootInfo["sku"], Environment.NewLine));
+				this.txtOutput.AppendText(string.Format("IMEI: {0}{1}", fastbootInfo["imei"], Environment.NewLine));
+				this.txtOutput.AppendText(string.Format("IMEI2: {0}{1}", fastbootInfo["imei2"], Environment.NewLine));
 				bool flag = !string.IsNullOrEmpty(fastbootInfo["firmware"]) && Operators.CompareString(fastbootInfo["firmware"], "No detectado", false) != 0;
 				if (flag)
 				{
-					string text2 = fastbootInfo["firmware"];
+					string text = fastbootInfo["firmware"];
 				}
 				else
 				{
 					bool flag2 = !string.IsNullOrEmpty(fastbootInfo["firmware01Limpio"]) && Operators.CompareString(fastbootInfo["firmware01Limpio"], "No detectado", false) != 0;
 					if (flag2)
 					{
-						string text2 = fastbootInfo["firmware01Limpio"];
+						string text = fastbootInfo["firmware01Limpio"];
 					}
 				}
 				this.txtOutput.AppendText(string.Format("Firmware: {0}{1}", fastbootInfo["firmware_final"], Environment.NewLine));
@@ -3470,12 +2725,11 @@ namespace Tstool
 			this.ActualizarProgreso();
 			this.GuardarLogDesdeTxtOutput();
 			this.TextBox1.Text = "Log guardado en: C:\\Tstool\\Logs";
-			string text = this.txtOutput.Text;
-			this.GuardarLogEnFirebase(text);
 			this.ActualizarProgreso();
+			this.CargarFirmwaresCompatibles();
 		}
 
-		// Token: 0x06000081 RID: 129 RVA: 0x00005D28 File Offset: 0x00003F28
+		// Token: 0x0600006F RID: 111 RVA: 0x00005EB0 File Offset: 0x000040B0
 		private Dictionary<string, string> GetFastbootInfo()
 		{
 			Dictionary<string, string> dictionary = new Dictionary<string, string>();
@@ -3484,14 +2738,13 @@ namespace Tstool
 				"product",
 				"serialno",
 				"storage-type",
-				"securestate",
+				"unlocked",
 				"ro.carrier",
 				"slot-count",
 				"sku",
 				"imei",
 				"imei2",
-				"version-baseband",
-				"cpu"
+				"version-baseband"
 			};
 			foreach (string text in array)
 			{
@@ -3528,7 +2781,7 @@ namespace Tstool
 			return dictionary;
 		}
 
-		// Token: 0x06000082 RID: 130 RVA: 0x00005F74 File Offset: 0x00004174
+		// Token: 0x06000070 RID: 112 RVA: 0x000060F4 File Offset: 0x000042F4
 		private string EjecutarFastboot(string comando)
 		{
 			string result;
@@ -3556,7 +2809,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000083 RID: 131 RVA: 0x00006038 File Offset: 0x00004238
+		// Token: 0x06000071 RID: 113 RVA: 0x000061B8 File Offset: 0x000043B8
 		private string ObtenerValorFastboot(string variable)
 		{
 			string input = this.EjecutarFastboot(string.Format("getvar {0}", variable));
@@ -3575,7 +2828,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000084 RID: 132 RVA: 0x0000609C File Offset: 0x0000429C
+		// Token: 0x06000072 RID: 114 RVA: 0x0000621C File Offset: 0x0000441C
 		private string ConcatenarFingerprint(string salida)
 		{
 			string text = "";
@@ -3600,7 +2853,7 @@ namespace Tstool
 			return text;
 		}
 
-		// Token: 0x06000085 RID: 133 RVA: 0x00006140 File Offset: 0x00004340
+		// Token: 0x06000073 RID: 115 RVA: 0x000062C0 File Offset: 0x000044C0
 		private string LimpiarFirmware(string firmwareBruto)
 		{
 			Regex regex = new Regex("([A-Z]\\d?[A-Z]{2,4}\\d{2,3}[A-Z]?\\.\\d{2,3}(-\\d{1,3}){1,6})", RegexOptions.IgnoreCase);
@@ -3618,7 +2871,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000086 RID: 134 RVA: 0x00006188 File Offset: 0x00004388
+		// Token: 0x06000074 RID: 116 RVA: 0x00006308 File Offset: 0x00004508
 		private string ConcatenarFingerprint0(string salida)
 		{
 			string text = "";
@@ -3643,7 +2896,7 @@ namespace Tstool
 			return text;
 		}
 
-		// Token: 0x06000087 RID: 135 RVA: 0x0000622C File Offset: 0x0000442C
+		// Token: 0x06000075 RID: 117 RVA: 0x000063AC File Offset: 0x000045AC
 		private string DetectarFirmware(Dictionary<string, string> fastbootInfo)
 		{
 			List<string> list = new List<string>();
@@ -3681,7 +2934,7 @@ namespace Tstool
 			return "No detectado";
 		}
 
-		// Token: 0x06000088 RID: 136 RVA: 0x00006320 File Offset: 0x00004520
+		// Token: 0x06000076 RID: 118 RVA: 0x000064A0 File Offset: 0x000046A0
 		private List<string> VerificarSoporte(string codename, string carrierid)
 		{
 			List<string> result = new List<string>();
@@ -3791,13 +3044,13 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000089 RID: 137 RVA: 0x000065E0 File Offset: 0x000047E0
+		// Token: 0x06000077 RID: 119 RVA: 0x00006760 File Offset: 0x00004960
 		private void SetAllButtonsEnabled(bool enabled, Control except = null)
 		{
 			this.HabilitarBotonesEnControles(base.Controls, enabled, except);
 		}
 
-		// Token: 0x0600008A RID: 138 RVA: 0x000065F4 File Offset: 0x000047F4
+		// Token: 0x06000078 RID: 120 RVA: 0x00006774 File Offset: 0x00004974
 		private void HabilitarBotonesEnControles(Control.ControlCollection controls, bool enabled, Control except)
 		{
 			try
@@ -3827,7 +3080,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600008B RID: 139 RVA: 0x00006680 File Offset: 0x00004880
+		// Token: 0x06000079 RID: 121 RVA: 0x00006800 File Offset: 0x00004A00
 		private string EstaSoportado(string model, string carrierid)
 		{
 			try
@@ -3877,7 +3130,7 @@ namespace Tstool
 			return "";
 		}
 
-		// Token: 0x0600008C RID: 140 RVA: 0x00006814 File Offset: 0x00004A14
+		// Token: 0x0600007A RID: 122 RVA: 0x00006994 File Offset: 0x00004B94
 		private void InitializeFastbootTimer()
 		{
 			this.fastbootTimer = new System.Timers.Timer(5000.0);
@@ -3885,12 +3138,12 @@ namespace Tstool
 			this.fastbootTimer.Enabled = true;
 		}
 
-		// Token: 0x0600008D RID: 141 RVA: 0x00006845 File Offset: 0x00004A45
+		// Token: 0x0600007B RID: 123 RVA: 0x000069C5 File Offset: 0x00004BC5
 		private void InitializeControls()
 		{
 		}
 
-		// Token: 0x0600008E RID: 142 RVA: 0x00006848 File Offset: 0x00004A48
+		// Token: 0x0600007C RID: 124 RVA: 0x000069C8 File Offset: 0x00004BC8
 		private void GuardarLogDesdeTxtOutput()
 		{
 			try
@@ -3944,73 +3197,8 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600008F RID: 143 RVA: 0x00006A1C File Offset: 0x00004C1C
-		public void LeerInformacionAdb(string selectedDevice)
-		{
-			try
-			{
-				bool flag = !string.IsNullOrEmpty(selectedDevice) && Operators.CompareString(selectedDevice, "waiting for devices...", false) != 0;
-				if (flag)
-				{
-					string arg = this.ExecuteAdbCommand("shell getprop ro.product.manufacturer", selectedDevice);
-					string arg2 = this.ExecuteAdbCommand("shell getprop ro.boot.serialno", selectedDevice);
-					string text = this.ExecuteAdbCommand("shell getprop ro.product.brand", selectedDevice);
-					string text2 = this.ExecuteAdbCommand("shell getprop ro.product.model", selectedDevice);
-					string arg3 = this.ExecuteAdbCommand("shell getprop ro.build.version.security_patch", selectedDevice);
-					string arg4 = this.ExecuteAdbCommand("shell getprop ro.build.version.release", selectedDevice);
-					string arg5 = this.ExecuteAdbCommand("shell getprop ro.boot.bootloader", selectedDevice);
-					string text3 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", selectedDevice);
-					string arg6 = this.ExecuteAdbCommand("shell getprop ro.hardware", selectedDevice);
-					string text4 = this.ExecuteAdbCommand("shell getprop ro.build.display.id", selectedDevice);
-					string arg7 = this.ExecuteAdbCommand("shell getprop gsm.sim.state", selectedDevice);
-					string arg8 = this.ExecuteAdbCommand("shell getprop ro.boot.rp", selectedDevice);
-					string text5 = this.ExecuteAdbCommand("shell getprop ro.boot.carrierid", selectedDevice);
-					string text6 = this.ExecuteAdbCommand("shell service call iphonesubinfo 1 | grep -o '[0-9a-f]\\{8\\} ' | tail -n+3 | while read a; do echo -n \\\\u${a:4:4}\\\\u${a:0:4}; done", selectedDevice);
-					string arg9 = this.ExecuteAdbCommand("shell getprop ro.boot.carrierid", selectedDevice);
-					this.txtOutput.Clear();
-					this.ActualizarProgreso();
-					this.txtOutput.AppendText(string.Format("- Connecting ... {0}", arg2) + Environment.NewLine);
-					this.txtOutput.AppendText(string.Format("Marca: {0}", arg) + Environment.NewLine);
-					this.txtOutput.AppendText(string.Format("model: {0}", text2) + Environment.NewLine);
-					this.txtOutput.AppendText(string.Format("SN: {0}", arg2) + Environment.NewLine);
-					this.txtOutput.AppendText(string.Format("Android: {0}", arg4) + Environment.NewLine);
-					this.txtOutput.AppendText(string.Format("Security: {0}", arg3) + Environment.NewLine);
-					this.txtOutput.AppendText(string.Format("Baseband: {0}", arg5) + Environment.NewLine);
-					this.txtOutput.AppendText(string.Format("SIM: {0}", arg7) + Environment.NewLine);
-					this.txtOutput.AppendText(string.Format("Hardware: {0}", arg6) + Environment.NewLine);
-					this.txtOutput.AppendText(string.Format("carrierid: {0}", text5) + Environment.NewLine);
-					this.txtOutput.AppendText(string.Format("Binario: {0}", arg8) + Environment.NewLine);
-					this.txtOutput.AppendText(string.Format("carrier: {0}", arg9) + Environment.NewLine);
-					this.ActualizarProgreso();
-					this.GuardarEnArchivo(text2, this.txtOutput.Text);
-					this.TextBox1.Text = "Log guardado en: \\Logs\\" + text2;
-					this.ActualizarProgreso();
-					string text7 = this.EstaSoportado(text2, text5);
-					bool flag2 = !string.IsNullOrEmpty(text7);
-					if (flag2)
-					{
-						this.txtOutput.AppendText(Environment.NewLine + "✅ Este dispositivo está soportado." + Environment.NewLine);
-						this.txtOutput.AppendText("ℹ️ " + text7 + Environment.NewLine);
-					}
-					else
-					{
-						this.txtOutput.AppendText(Environment.NewLine + "❌ Este dispositivo NO está soportado." + Environment.NewLine);
-					}
-					this.ActualizarProgreso();
-				}
-				else
-				{
-					MessageBox.Show("Por favor selecciona un dispositivo ADB.");
-				}
-			}
-			catch (Exception ex)
-			{
-				MessageBox.Show("Error al leer desde el dispositivo ADB: " + ex.Message);
-			}
-		}
-
-		// Token: 0x06000090 RID: 144 RVA: 0x00006DD8 File Offset: 0x00004FD8
-		private async Task EjecutarLecturaAdbAsync()
+		// Token: 0x0600007D RID: 125 RVA: 0x00006B9C File Offset: 0x00004D9C
+		private async void btnReadADBAll_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
 			if (flag)
@@ -4058,7 +3246,7 @@ namespace Tstool
 							}
 							else
 							{
-								bool flag4 = this.cancelRequested || token.IsCancellationRequested;
+								bool flag4 = this.cancelRequested | token.IsCancellationRequested;
 								if (flag4)
 								{
 									this.LogOutput("⏹ Proceso cancelado antes de iniciar la lectura.");
@@ -4067,72 +3255,7 @@ namespace Tstool
 								{
 									this.LogOutput(string.Format("\ud83d\udd0d Leyendo información de: {0}", selectedDevice));
 									this.txtOutput.Clear();
-									string text = this.ExecuteAdbCommand("shell getprop ro.product.manufacturer", selectedDevice).ToLower().Trim();
-									uint num = <PrivateImplementationDetails>.ComputeStringHash(text);
-									if (num <= 1554908468U)
-									{
-										if (num != 272549840U)
-										{
-											if (num != 746161167U)
-											{
-												if (num == 1554908468U)
-												{
-													if (Operators.CompareString(text, "xiaomi", false) == 0)
-													{
-														this.LeerXiaomi(selectedDevice);
-														goto IL_2D5;
-													}
-												}
-											}
-											else if (Operators.CompareString(text, "honor", false) == 0)
-											{
-												this.LeerHonor(selectedDevice);
-												goto IL_2D5;
-											}
-										}
-										else if (Operators.CompareString(text, "motorola", false) == 0)
-										{
-											this.LeerMotorola(selectedDevice);
-											goto IL_2D5;
-										}
-									}
-									else if (num <= 2743415571U)
-									{
-										if (num != 2621529407U)
-										{
-											if (num == 2743415571U)
-											{
-												if (Operators.CompareString(text, "oneplus", false) == 0)
-												{
-													this.LeerOnePlus(selectedDevice);
-													goto IL_2D5;
-												}
-											}
-										}
-										else if (Operators.CompareString(text, "samsung", false) == 0)
-										{
-											this.LeerSamsung(selectedDevice);
-											goto IL_2D5;
-										}
-									}
-									else if (num != 3285168183U)
-									{
-										if (num == 3422476192U)
-										{
-											if (Operators.CompareString(text, "huawei", false) == 0)
-											{
-												this.LeerHuawei(selectedDevice);
-												goto IL_2D5;
-											}
-										}
-									}
-									else if (Operators.CompareString(text, "vivo", false) == 0)
-									{
-										this.LeerOnePlus(selectedDevice);
-										goto IL_2D5;
-									}
-									this.LeerGenerico(selectedDevice, text);
-									IL_2D5:
+									this.LeerInformacionAdbPorMarca(selectedDevice);
 									this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
 									{
 										this.UpdateProgressBar();
@@ -4162,7 +3285,7 @@ namespace Tstool
 				}
 				catch (Exception ex)
 				{
-					MessageBox.Show("❌ Error de limpieza: " + ex.Message);
+					MessageBox.Show("❌ Error: " + ex.Message);
 				}
 				finally
 				{
@@ -4170,177 +3293,126 @@ namespace Tstool
 					this.btnCancelarProceso.Enabled = false;
 					this.Invoke(new VB$AnonymousDelegate_0(delegate()
 					{
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 					}));
 				}
 			}
 		}
 
-		// Token: 0x06000091 RID: 145 RVA: 0x00006E1C File Offset: 0x0000501C
-		private async void btnReadAdbAll_Click(object sender, EventArgs e)
+		// Token: 0x0600007E RID: 126 RVA: 0x00006BE4 File Offset: 0x00004DE4
+		public void LeerInformacionAdb(string selectedDevice)
 		{
-			Form1._Closure$__104-0 CS$<>8__locals1 = new Form1._Closure$__104-0(CS$<>8__locals1);
-			CS$<>8__locals1.$VB$Me = this;
-			CS$<>8__locals1.$VB$Local_devices = this.GetAdbDevices();
-			bool flag = CS$<>8__locals1.$VB$Local_devices.Count == 0;
-			if (flag)
+			try
 			{
-				MessageBox.Show("No se detectó ningún dispositivo ADB.");
-			}
-			else
-			{
-				this.cmbDevicesAdb.Invoke(new VB$AnonymousDelegate_0(delegate()
+				bool flag = !string.IsNullOrEmpty(selectedDevice) && Operators.CompareString(selectedDevice, "waiting for devices...", false) != 0;
+				if (flag)
 				{
-					CS$<>8__locals1.$VB$Me.cmbDevicesAdb.Items.Clear();
-					try
-					{
-						foreach (string item in CS$<>8__locals1.$VB$Local_devices)
-						{
-							CS$<>8__locals1.$VB$Me.cmbDevicesAdb.Items.Add(item);
-						}
-					}
-					finally
-					{
-						List<string>.Enumerator enumerator;
-						((IDisposable)enumerator).Dispose();
-					}
-					CS$<>8__locals1.$VB$Me.cmbDevicesAdb.SelectedIndex = 0;
-				}));
-				CS$<>8__locals1.$VB$Local_selectedDevice = "";
-				this.cmbDevicesAdb.Invoke(new VB$AnonymousDelegate_0(delegate()
-				{
-					CS$<>8__locals1.$VB$Local_selectedDevice = CS$<>8__locals1.$VB$Me.cmbDevicesAdb.SelectedItem.ToString();
-				}));
-				await this.EjecutarReadAdbAll(CS$<>8__locals1.$VB$Local_selectedDevice);
-			}
-		}
-
-		// Token: 0x06000092 RID: 146 RVA: 0x00006E64 File Offset: 0x00005064
-		private async Task EjecutarReadAdbAll(string selectedDevice)
-		{
-			bool flag = this.processRunning;
-			if (!flag)
-			{
-				this.processRunning = true;
-				this.cancelRequested = false;
-				this.SetAllButtonsEnabled(false, null);
-				this.btnCancelarProceso.Enabled = true;
-				this.VerificarEntornoSeguro();
-				this.ListView1.Visible = false;
-				this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
-				{
-					this.InitializeProgressBar(3);
-				}));
-				DateTime inicio = DateTime.Now;
-				try
-				{
-					this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
-					{
-						this.UpdateProgressBar();
-					}));
+					string arg = this.ExecuteAdbCommand("shell getprop ro.product.manufacturer", selectedDevice);
+					string arg2 = this.ExecuteAdbCommand("shell getprop ro.boot.serialno", selectedDevice);
+					string text = this.ExecuteAdbCommand("shell getprop ro.product.brand", selectedDevice);
+					string text2 = this.ExecuteAdbCommand("shell getprop ro.product.model", selectedDevice);
+					string arg3 = this.ExecuteAdbCommand("shell getprop ro.build.version.security_patch", selectedDevice);
+					string arg4 = this.ExecuteAdbCommand("shell getprop ro.build.version.release", selectedDevice);
+					string arg5 = this.ExecuteAdbCommand("shell getprop ro.boot.bootloader", selectedDevice);
+					string text3 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", selectedDevice);
+					string arg6 = this.ExecuteAdbCommand("shell getprop ro.hardware", selectedDevice);
+					string text4 = this.ExecuteAdbCommand("shell getprop ro.build.display.id", selectedDevice);
+					string arg7 = this.ExecuteAdbCommand("shell getprop gsm.sim.state", selectedDevice);
+					string arg8 = this.ExecuteAdbCommand("shell getprop ro.boot.rp", selectedDevice);
+					string text5 = this.ExecuteAdbCommand("shell getprop ro.boot.carrierid", selectedDevice);
+					string text6 = this.ExecuteAdbCommand("shell service call iphonesubinfo 1 | grep -o '[0-9a-f]\\{8\\} ' | tail -n+3 | while read a; do echo -n \\\\u${a:4:4}\\\\u${a:0:4}; done", selectedDevice);
+					string arg9 = this.ExecuteAdbCommand("shell getprop ro.boot.carrierid", selectedDevice);
 					this.txtOutput.Clear();
-					this.txtOutput.AppendText("Operation : Read Info Adb" + Environment.NewLine);
-					await Task.Run(delegate()
+					this.ActualizarProgreso();
+					this.txtOutput.AppendText(string.Format("- Connecting ... {0}", arg2) + Environment.NewLine);
+					this.txtOutput.AppendText(string.Format("Marca: {0}", arg) + Environment.NewLine);
+					this.txtOutput.AppendText(string.Format("model: {0}", text2) + Environment.NewLine);
+					this.txtOutput.AppendText(string.Format("SN: {0}", arg2) + Environment.NewLine);
+					this.txtOutput.AppendText(string.Format("Android: {0}", arg4) + Environment.NewLine);
+					this.txtOutput.AppendText(string.Format("Parche: {0}", arg3) + Environment.NewLine);
+					this.txtOutput.AppendText(string.Format("Baseband: {0}", arg5) + Environment.NewLine);
+					this.txtOutput.AppendText(string.Format("SIM: {0}", arg7) + Environment.NewLine);
+					this.txtOutput.AppendText(string.Format("Hardware: {0}", arg6) + Environment.NewLine);
+					this.txtOutput.AppendText(string.Format("carrierid: {0}", text5) + Environment.NewLine);
+					this.txtOutput.AppendText(string.Format("Binario: {0}", arg8) + Environment.NewLine);
+					this.txtOutput.AppendText(string.Format("carrier: {0}", arg9) + Environment.NewLine);
+					this.ActualizarProgreso();
+					this.GuardarEnArchivo(text2, this.txtOutput.Text);
+					this.TextBox1.Text = "Log guardado en: \\Logs\\" + text2;
+					this.ActualizarProgreso();
+					string text7 = this.EstaSoportado(text2, text5);
+					bool flag2 = !string.IsNullOrEmpty(text7);
+					if (flag2)
 					{
-						this.LeerInformacionAdbPorMarca(selectedDevice);
-					});
-					this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
+						this.txtOutput.AppendText(Environment.NewLine + "✅ Este dispositivo está soportado." + Environment.NewLine);
+						this.txtOutput.AppendText("ℹ️ " + text7 + Environment.NewLine);
+					}
+					else
 					{
-						this.UpdateProgressBar();
-					}));
-					this.txtOutput.AppendText(Environment.NewLine);
-					this.txtOutput.AppendText("✅ Process : Read Info Adb - completado." + Environment.NewLine);
-					TimeSpan duracion = DateTime.Now.Subtract(inicio);
-					this.txtOutput.AppendText(string.Format("⏱ Duración total: {0}h {1}m {2}s", duracion.Hours, duracion.Minutes, duracion.Seconds) + Environment.NewLine);
-					this.GuardarLog(selectedDevice, "Read Info Adb", this.txtOutput);
-					string textoPlano = this.txtOutput.Text;
-					await this.GuardarLogEnFirebase(textoPlano);
-					this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
-					{
-						this.UpdateProgressBar();
-					}));
+						this.txtOutput.AppendText(Environment.NewLine + "❌ Este dispositivo NO está soportado." + Environment.NewLine);
+					}
+					this.ActualizarProgreso();
 				}
-				finally
+				else
 				{
-					this.processRunning = false;
-					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					MessageBox.Show("Por favor selecciona un dispositivo ADB.");
 				}
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show("Error al leer desde el dispositivo ADB: " + ex.Message);
 			}
 		}
 
-		// Token: 0x06000093 RID: 147 RVA: 0x00006EB0 File Offset: 0x000050B0
+		// Token: 0x0600007F RID: 127 RVA: 0x00006FA0 File Offset: 0x000051A0
 		public void LeerInformacionAdbPorMarca(string selectedDevice)
 		{
-			this.VerificarEntornoSeguro();
 			try
 			{
 				string text = this.ExecuteAdbCommand("shell getprop ro.product.manufacturer", selectedDevice).ToLower().Trim();
-				uint num = <PrivateImplementationDetails>.ComputeStringHash(text);
-				if (num <= 1554908468U)
+				if (Operators.CompareString(text, "samsung", false) != 0)
 				{
-					if (num != 272549840U)
+					if (Operators.CompareString(text, "motorola", false) != 0)
 					{
-						if (num != 746161167U)
+						if (Operators.CompareString(text, "xiaomi", false) != 0)
 						{
-							if (num == 1554908468U)
+							if (Operators.CompareString(text, "huawei", false) != 0)
 							{
-								if (Operators.CompareString(text, "xiaomi", false) == 0)
+								if (Operators.CompareString(text, "honor", false) != 0)
 								{
-									this.LeerXiaomi(selectedDevice);
-									goto IL_15C;
+									if (Operators.CompareString(text, "oneplus", false) != 0)
+									{
+										this.LeerGenerico(selectedDevice, text);
+									}
+									else
+									{
+										this.LeerOnePlus(selectedDevice);
+									}
+								}
+								else
+								{
+									this.LeerHonor(selectedDevice);
 								}
 							}
-						}
-						else if (Operators.CompareString(text, "honor", false) == 0)
-						{
-							this.LeerHonor(selectedDevice);
-							goto IL_15C;
-						}
-					}
-					else if (Operators.CompareString(text, "motorola", false) == 0)
-					{
-						this.LeerMotorola(selectedDevice);
-						goto IL_15C;
-					}
-				}
-				else if (num <= 2743415571U)
-				{
-					if (num != 2621529407U)
-					{
-						if (num == 2743415571U)
-						{
-							if (Operators.CompareString(text, "oneplus", false) == 0)
+							else
 							{
-								this.LeerOnePlus(selectedDevice);
-								goto IL_15C;
+								this.LeerHuawei(selectedDevice);
 							}
 						}
-					}
-					else if (Operators.CompareString(text, "samsung", false) == 0)
-					{
-						this.LeerSamsung(selectedDevice);
-						goto IL_15C;
-					}
-				}
-				else if (num != 3285168183U)
-				{
-					if (num == 3422476192U)
-					{
-						if (Operators.CompareString(text, "huawei", false) == 0)
+						else
 						{
-							this.LeerHuawei(selectedDevice);
-							goto IL_15C;
+							this.LeerXiaomi(selectedDevice);
 						}
 					}
+					else
+					{
+						this.LeerMotorola(selectedDevice);
+					}
 				}
-				else if (Operators.CompareString(text, "vivo", false) == 0)
+				else
 				{
-					this.LeerVivo(selectedDevice);
-					goto IL_15C;
+					this.LeerSamsung(selectedDevice);
 				}
-				this.LeerGenerico(selectedDevice, text);
-				IL_15C:;
 			}
 			catch (Exception ex)
 			{
@@ -4348,142 +3420,103 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000094 RID: 148 RVA: 0x00007060 File Offset: 0x00005260
+		// Token: 0x06000080 RID: 128 RVA: 0x000070A4 File Offset: 0x000052A4
 		private void LeerGenerico(string device, string manufacturer)
 		{
 			this.txtOutput.Clear();
 			string arg = this.ExecuteAdbCommand("shell getprop ro.boot.serialno", device);
 			string text = this.ExecuteAdbCommand("shell getprop ro.product.model", device);
-			string arg2 = this.ExecuteAdbCommand("shell getprop ro.product.publicname", device);
-			string arg3 = this.ExecuteAdbCommand("shell getprop ro.build.version.release", device);
-			string arg4 = this.ExecuteAdbCommand("shell getprop ro.build.version.security_patch", device);
+			string arg2 = this.ExecuteAdbCommand("shell getprop ro.build.version.release", device);
+			string arg3 = this.ExecuteAdbCommand("shell getprop ro.build.version.security_patch", device);
 			string text2 = this.ExecuteAdbCommand("shell getprop ro.build.display.id", device);
-			string arg5 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", device);
-			string arg6 = this.ExecuteAdbCommand("shell getprop ro.hardware", device);
-			string arg7 = this.ExecuteAdbCommand("shell getprop gsm.sim.state", device);
-			string arg8 = this.ExecuteAdbCommand("shell getprop ro.carrier", device);
-			string arg9 = this.ExecuteAdbCommand("shell getprop ro.build.display.id", device);
+			string arg4 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", device);
+			string arg5 = this.ExecuteAdbCommand("shell getprop ro.hardware", device);
+			string arg6 = this.ExecuteAdbCommand("shell getprop gsm.sim.state", device);
+			string arg7 = this.ExecuteAdbCommand("shell getprop ro.carrier", device);
+			string arg8 = this.ExecuteAdbCommand("shell getprop ro.build.display.id", device);
 			string text3 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", device);
-			string arg10 = this.ExecuteAdbCommand("shell getprop ro.config.cpu_info_display", device);
-			string arg11 = this.ExecuteAdbCommand("shell getprop ro.soc.model", device);
-			string parcelRaw = this.ExecuteAdbCommand("shell service call iphonesubinfo 1 s16 com.android.shell", device);
-			string arg12 = this.LimpiarIMEI(parcelRaw);
+			string arg9 = this.ExecuteAdbCommand("shell getprop ro.config.cpu_info_display", device);
+			string arg10 = this.ExecuteAdbCommand("shell getprop ro.soc.model", device);
 			this.txtOutput.AppendText(string.Format("\ud83d\udcf1 Dispositivo genérico ({0})", manufacturer) + Environment.NewLine);
 			this.txtOutput.AppendText(string.Format("- Connecting ... {0}", arg) + Environment.NewLine);
 			this.txtOutput.AppendText(string.Format("Marca: {0}", manufacturer) + Environment.NewLine);
-			this.txtOutput.AppendText(string.Format("CodeName : {0}", arg2));
-			this.txtOutput.AppendText(string.Format("Model : {0}", text));
+			this.txtOutput.AppendText(string.Format("model: {0}", text));
 			this.txtOutput.AppendText(string.Format("SN: {0}", arg));
-			this.txtOutput.AppendText(string.Format("Android: {0}", arg3));
-			this.txtOutput.AppendText(string.Format("Security: {0}", arg4));
-			this.txtOutput.AppendText(string.Format("Hardware: {0}", arg6));
-			this.txtOutput.AppendText(string.Format("Carrier ID: {0}", arg8));
-			this.txtOutput.AppendText(string.Format("Compilacion: {0}", arg9));
-			this.txtOutput.AppendText(string.Format("SIM: {0}", arg7));
-			this.txtOutput.AppendText(string.Format("Baseband: {0}", arg5));
-			this.txtOutput.AppendText(string.Format("Procoesador: {0}", arg10));
-			this.txtOutput.AppendText(string.Format("Modelo Procesador: {0}", arg11));
-			this.txtOutput.AppendText(string.Format("IMEI : {0}", arg12));
+			this.txtOutput.AppendText(string.Format("Android: {0}", arg2));
+			this.txtOutput.AppendText(string.Format("Parche: {0}", arg3));
+			this.txtOutput.AppendText(string.Format("Hardware: {0}", arg5));
+			this.txtOutput.AppendText(string.Format("Carrier ID: {0}", arg7));
+			this.txtOutput.AppendText(string.Format("Compilacion: {0}", arg8));
+			this.txtOutput.AppendText(string.Format("SIM: {0}", arg6));
+			this.txtOutput.AppendText(string.Format("Baseband: {0}", arg4));
+			this.txtOutput.AppendText(string.Format("Procoesador: {0}", arg9));
+			this.txtOutput.AppendText(string.Format("Modelo Procesador: {0}", arg10));
 			this.GuardarEnArchivo(text, this.txtOutput.Text);
 			this.TextBox1.Text = "Log guardado en: \\Logs\\" + text;
 		}
 
-		// Token: 0x06000095 RID: 149 RVA: 0x00007314 File Offset: 0x00005514
+		// Token: 0x06000081 RID: 129 RVA: 0x00007304 File Offset: 0x00005504
 		private void LeerMotorola(string device)
 		{
+			this.txtOutput.Clear();
 			string arg = this.ExecuteAdbCommand("shell getprop ro.boot.serialno", device);
-			string arg2 = this.ExecuteAdbCommand("shell getprop ro.product.manufacturer", device);
-			string arg3 = this.ExecuteAdbCommand("shell getprop ro.boot.hardware.sku", device);
-			string arg4 = this.ExecuteAdbCommand("shell getprop ro.product.model", device);
-			string arg5 = this.ExecuteAdbCommand("shell getprop ro.carrier", device);
-			string arg6 = this.ExecuteAdbCommand("shell getprop ro.product.device", device);
-			string arg7 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", device);
-			string arg8 = this.ExecuteAdbCommand("shell getprop ro.build.version.release", device);
-			string arg9 = this.ExecuteAdbCommand("shell getprop ro.build.version.security_patch", device);
-			string arg10 = this.ExecuteAdbCommand("shell getprop gsm.operator.iso-country", device);
-			string arg11 = this.ExecuteAdbCommand("shell getprop ro.build.display.id", device);
-			string arg12 = this.ExecuteAdbCommand("shell getprop ro.hardware", device);
-			string text = this.ExecuteAdbCommand("shell getprop ro.soc.manufacturer", device);
-			string arg13 = this.ExecuteAdbCommand("shell getprop ro.soc.model", device);
-			string text2 = this.ExecuteAdbCommand("shell getprop ro.config.cpu_info_display", device);
-			string arg14 = this.ExecuteAdbCommand("shell getprop gsm.sim.state", device);
-			string arg15 = this.ExecuteAdbCommand("shell getprop persist.sys.usb.config", device);
-			string text3 = this.ExecuteAdbCommand("shell getprop ro.boot.rp", device);
-			string parcelRaw = this.ExecuteAdbCommand("shell service call iphonesubinfo 1 s16 com.android.shell", device);
-			string arg16 = this.LimpiarIMEI(parcelRaw);
-			this.txtOutput.AppendText("\ud83d\udcf1 Motorola Device" + Environment.NewLine);
-			this.txtOutput.AppendText(string.Format("SN: {0}", arg));
-			this.txtOutput.AppendText(string.Format("Brand : {0}", arg2));
-			this.txtOutput.AppendText(string.Format("Model: {0}", arg3));
-			this.txtOutput.AppendText(string.Format("ModelName: {0}", arg4));
-			this.txtOutput.AppendText(string.Format("Carrier ID: {0}", arg5));
-			this.txtOutput.AppendText(string.Format("Codename: {0}", arg6));
-			this.txtOutput.AppendText(string.Format("Android: {0}", arg8));
-			this.txtOutput.AppendText(string.Format("Security: {0}", arg9));
-			this.txtOutput.AppendText(string.Format("Region : {0}", arg10));
-			this.txtOutput.AppendText(string.Format("Firmware: {0}", arg11));
-			this.txtOutput.AppendText(string.Format("Cpu : {0}", arg12));
-			this.txtOutput.AppendText(string.Format("Cpu Type : {0}", arg13));
-			this.txtOutput.AppendText(string.Format("Hardware ID : {0}", arg12));
-			this.txtOutput.AppendText(string.Format("SIM State : {0}", arg14));
-			this.txtOutput.AppendText(string.Format("USB Config : {0}", arg15));
-			this.txtOutput.AppendText(string.Format("Baseband: {0}", arg7));
-			this.txtOutput.AppendText(string.Format("IMEI : {0}", arg16));
-		}
-
-		// Token: 0x06000096 RID: 150 RVA: 0x000075E4 File Offset: 0x000057E4
-		private void LeerSamsung(string device)
-		{
-			string arg = this.ExecuteAdbCommand("shell getprop ro.boot.serialno", device);
-			string text = this.ExecuteAdbCommand("shell getprop ro.product.manufacturer", device);
-			string arg2 = this.ExecuteAdbCommand("shell getprop ro.product.manufacturer", device);
-			string arg3 = this.ExecuteAdbCommand("shell getprop ro.product.model", device);
-			string arg4 = this.ExecuteAdbCommand("shell getprop ro.build.product", device);
+			string text = this.ExecuteAdbCommand("shell getprop ro.product.model", device);
+			string arg2 = this.ExecuteAdbCommand("shell getprop ro.carrier", device);
+			string arg3 = this.ExecuteAdbCommand("shell getprop ro.product.device", device);
+			string arg4 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", device);
 			string arg5 = this.ExecuteAdbCommand("shell getprop ro.build.version.release", device);
 			string arg6 = this.ExecuteAdbCommand("shell getprop ro.build.version.security_patch", device);
-			string arg7 = this.ExecuteAdbCommand("shell getprop gsm.operator.iso-country", device);
-			string text2 = this.ExecuteAdbCommand("shell getprop ro.boot.bootloader", device);
-			string arg8 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", device);
-			string arg9 = this.ExecuteAdbCommand("shell getprop ro.build.PDA", device);
-			string arg10 = this.ExecuteAdbCommand("shell getprop ro.vendor.build.version.incremental", device);
-			string text3 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", device);
-			string arg11 = this.ExecuteAdbCommand("shell getprop ro.boot.carrierid", device);
-			string arg12 = this.ExecuteAdbCommand("shell getprop ro.build.display.id", device);
-			string text4 = this.ExecuteAdbCommand("shell getprop knox.kg.state", device);
-			string text5 = this.ExecuteAdbCommand("shell getprop gsm.sim.state", device);
-			string arg13 = this.ExecuteAdbCommand("shell getprop ro.soc.manufacturer", device);
-			string arg14 = this.ExecuteAdbCommand("shell getprop ro.soc.model", device);
-			string arg15 = this.ExecuteAdbCommand("shell getprop ro.config.cpu_info_display", device);
-			string arg16 = this.ExecuteAdbCommand("shell getprop ro.bootloader", device);
-			string arg17 = this.ExecuteAdbCommand("shell getprop gsm.sim.state", device);
-			string arg18 = this.ExecuteAdbCommand("shell getprop persist.sys.usb.config", device);
-			string arg19 = this.ExecuteAdbCommand("shell getprop ro.boot.rp", device);
-			string parcelRaw = this.ExecuteAdbCommand("shell service call iphonesubinfo 1 s16 com.android.shell", device);
-			string arg20 = this.LimpiarIMEI(parcelRaw);
-			this.txtOutput.AppendText("\ud83d\udcf1 Samsung Device" + Environment.NewLine);
-			this.txtOutput.AppendText(string.Format("SN : {0}", arg));
-			this.txtOutput.AppendText(string.Format("Brand : {0}", arg2));
-			this.txtOutput.AppendText(string.Format("Model : {0}", arg4));
-			this.txtOutput.AppendText(string.Format("CodeName : {0}", arg3));
-			this.txtOutput.AppendText(string.Format("Version : {0}", arg12));
-			this.txtOutput.AppendText(string.Format("Region : {0}", arg7));
-			this.txtOutput.AppendText(string.Format("Android : {0}", arg5));
-			this.txtOutput.AppendText(string.Format("Security : {0}", arg6));
-			this.txtOutput.AppendText(string.Format("Bit : {0}", arg19));
-			this.txtOutput.AppendText(string.Format("BL : {0}", arg16));
-			this.txtOutput.AppendText(string.Format("AP : {0}", arg9));
-			this.txtOutput.AppendText(string.Format("CP : {0}", arg8));
-			this.txtOutput.AppendText(string.Format("CSC : {0}", arg10));
-			this.txtOutput.AppendText(string.Format("CarrierId : {0}", arg11));
-			this.txtOutput.AppendText(string.Format("Cpu : {0}", arg13));
-			this.txtOutput.AppendText(string.Format("Cpu Type : {0}", arg14));
-			this.txtOutput.AppendText(string.Format("Hardware ID : {0}", arg15));
-			this.txtOutput.AppendText(string.Format("SIM State : {0}", arg17));
-			this.txtOutput.AppendText(string.Format("USB Config : {0}", arg18));
-			this.txtOutput.AppendText(string.Format("IMEI : {0}", arg20));
+			string arg7 = this.ExecuteAdbCommand("shell getprop ro.build.display.id", device);
+			string arg8 = this.ExecuteAdbCommand("shell getprop ro.hardware", device);
+			string arg9 = this.ExecuteAdbCommand("shell getprop gsm.sim.state", device);
+			this.txtOutput.AppendText("\ud83d\udcf1 Motorola Device" + Environment.NewLine);
+			this.txtOutput.AppendText(string.Format("SN: {0}", arg));
+			this.txtOutput.AppendText(string.Format("Model: {0}", text));
+			this.txtOutput.AppendText(string.Format("Carrier ID: {0}", arg2));
+			this.txtOutput.AppendText(string.Format("Code name: {0}", arg3));
+			this.txtOutput.AppendText(string.Format("Android: {0}", arg5));
+			this.txtOutput.AppendText(string.Format("Parche Seguridad: {0}", arg6));
+			this.txtOutput.AppendText(string.Format("Firmware: {0}", arg7));
+			this.txtOutput.AppendText(string.Format("Baseband: {0}", arg4));
+			this.txtOutput.AppendText(string.Format("Hardware: {0}", arg8));
+			this.txtOutput.AppendText(string.Format("SIM: {0}", arg9) + Environment.NewLine);
+			this.GuardarEnArchivo(text, this.txtOutput.Text);
+			this.TextBox1.Text = "Log guardado en: \\Logs\\" + text;
 		}
 
-		// Token: 0x06000097 RID: 151 RVA: 0x00007950 File Offset: 0x00005B50
+		// Token: 0x06000082 RID: 130 RVA: 0x000074E4 File Offset: 0x000056E4
+		private void LeerSamsung(string device)
+		{
+			string arg = this.ExecuteAdbCommand("shell getprop ro.product.manufacturer", device);
+			string arg2 = this.ExecuteAdbCommand("shell getprop ro.boot.serialno", device);
+			string arg3 = this.ExecuteAdbCommand("shell getprop ro.product.model", device);
+			string arg4 = this.ExecuteAdbCommand("shell getprop ro.build.version.release", device);
+			string arg5 = this.ExecuteAdbCommand("shell getprop ro.build.version.security_patch", device);
+			string arg6 = this.ExecuteAdbCommand("shell getprop ro.boot.bootloader", device);
+			string text = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", device);
+			string text2 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", device);
+			string arg7 = this.ExecuteAdbCommand("shell getprop ro.boot.carrierid", device);
+			string text3 = this.ExecuteAdbCommand("shell getprop ro.build.display.id", device);
+			string arg8 = this.ExecuteAdbCommand("shell getprop knox.kg.state", device);
+			string arg9 = this.ExecuteAdbCommand("shell getprop gsm.sim.state", device);
+			string arg10 = this.ExecuteAdbCommand("shell getprop ro.hardware", device);
+			string arg11 = this.ExecuteAdbCommand("shell getprop ro.soc.model", device);
+			this.txtOutput.AppendText("\ud83d\udcf1 Samsung Device" + Environment.NewLine);
+			this.txtOutput.AppendText(string.Format("- Connecting ... {0}", arg2));
+			this.txtOutput.AppendText(string.Format("Marca: {0}", arg));
+			this.txtOutput.AppendText(string.Format("model: {0}", arg3));
+			this.txtOutput.AppendText(string.Format("SN: {0}", arg2));
+			this.txtOutput.AppendText(string.Format("Android: {0}", arg4));
+			this.txtOutput.AppendText(string.Format("Parche: {0}", arg5));
+			this.txtOutput.AppendText(string.Format("Baseband: {0}", arg6));
+			this.txtOutput.AppendText(string.Format("SIM: {0}", arg9));
+			this.txtOutput.AppendText(string.Format("Hardware: {0}", arg10));
+			this.txtOutput.AppendText(string.Format("Hardware: {0}", arg11));
+			this.txtOutput.AppendText(string.Format("Carrier ID: {0}", arg7));
+			this.txtOutput.AppendText(string.Format("KG Knox: {0}", arg8) + Environment.NewLine);
+		}
+
+		// Token: 0x06000083 RID: 131 RVA: 0x000076F4 File Offset: 0x000058F4
 		private void LeerXiaomi(string device)
 		{
 			string arg = this.ExecuteAdbCommand("shell getprop ro.boot.serialno", device);
@@ -4521,92 +3554,59 @@ namespace Tstool
 			this.txtOutput.AppendText(string.Format("USB Config : {0}", arg15));
 		}
 
-		// Token: 0x06000098 RID: 152 RVA: 0x00007BD0 File Offset: 0x00005DD0
+		// Token: 0x06000084 RID: 132 RVA: 0x00007974 File Offset: 0x00005B74
 		private void LeerHuawei(string device)
-		{
-			string arg = this.ExecuteAdbCommand("shell getprop ro.boot.serialno", device);
-			string arg2 = this.ExecuteAdbCommand("shell getprop ro.product.manufacturer", device);
-			string arg3 = this.ExecuteAdbCommand("shell getprop ro.product.model", device);
-			string arg4 = this.ExecuteAdbCommand("shell getprop ro.config.marketing_name", device);
-			string arg5 = this.ExecuteAdbCommand("shell getprop ro.build.version.incremental", device);
-			string arg6 = this.ExecuteAdbCommand("shell getprop gsm.hw.operator.iso-country", device);
-			string arg7 = this.ExecuteAdbCommand("shell getprop persist.sys.nvcfg_file0", device);
-			string arg8 = this.ExecuteAdbCommand("shell getprop ro.build.version.release", device);
-			string arg9 = this.ExecuteAdbCommand("shell getprop ro.bootloader", device);
-			string arg10 = this.ExecuteAdbCommand("shell getprop ro.build.version.security_patch", device);
-			string arg11 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", device);
-			string arg12 = this.ExecuteAdbCommand("shell getprop ro.soc.manufacturer", device);
-			string arg13 = this.ExecuteAdbCommand("shell getprop ro.soc.model", device);
-			string arg14 = this.ExecuteAdbCommand("shell getprop ro.config.cpu_info_display", device);
-			string arg15 = this.ExecuteAdbCommand("shell getprop gsm.sim.state", device);
-			string arg16 = this.ExecuteAdbCommand("shell getprop persist.sys.usb.config", device);
-			string text = this.ExecuteAdbCommand("shell getprop ro.build.fingerprint", device);
-			string parcelRaw = this.ExecuteAdbCommand("shell service call iphonesubinfo 1 s16 com.android.shell", device);
-			string arg17 = this.LimpiarIMEI(parcelRaw);
-			this.txtOutput.AppendText(string.Format("SN : {0}", arg) + Environment.NewLine);
-			this.txtOutput.AppendText(string.Format("Brand : {0}", arg2));
-			this.txtOutput.AppendText(string.Format("CodeName : {0}", arg3));
-			this.txtOutput.AppendText(string.Format("Model : {0}", arg4));
-			this.txtOutput.AppendText(string.Format("Version : {0}", arg5));
-			this.txtOutput.AppendText(string.Format("Region : {0}", arg6));
-			this.txtOutput.AppendText(string.Format("Android : {0}", arg8));
-			this.txtOutput.AppendText(string.Format("Security : {0}", arg10));
-			this.txtOutput.AppendText(string.Format("Bootloader : {0}", arg9));
-			this.txtOutput.AppendText(string.Format("CP : {0}", arg11));
-			this.txtOutput.AppendText(string.Format("CarrierId : {0}", arg7));
-			this.txtOutput.AppendText(string.Format("Cpu : {0}", arg12));
-			this.txtOutput.AppendText(string.Format("Cpu Type : {0}", arg13));
-			this.txtOutput.AppendText(string.Format("Hardware ID : {0}", arg14));
-			this.txtOutput.AppendText(string.Format("SIM State : {0}", arg15));
-			this.txtOutput.AppendText(string.Format("USB Config : {0}", arg16));
-			this.txtOutput.AppendText(string.Format("IMEI : {0}", arg17));
-		}
-
-		// Token: 0x06000099 RID: 153 RVA: 0x00007E80 File Offset: 0x00006080
-		private void LeerHonor(string device)
 		{
 			this.txtOutput.Clear();
 			string arg = this.ExecuteAdbCommand("shell getprop ro.boot.serialno", device);
-			string arg2 = this.ExecuteAdbCommand("shell getprop ro.product.manufacturer", device);
-			string arg3 = this.ExecuteAdbCommand("shell getprop ro.product.model", device);
-			string text = this.ExecuteAdbCommand("shell getprop ro.config.marketing_name", device);
-			string arg4 = this.ExecuteAdbCommand("shell getprop ro.build.version.incremental", device);
-			string arg5 = this.ExecuteAdbCommand("shell getprop gsm.msc.operator.iso-country", device);
-			string arg6 = this.ExecuteAdbCommand("shell getprop gsm.operator.alpha", device);
-			string arg7 = this.ExecuteAdbCommand("shell getprop ro.build.version.release", device);
-			string arg8 = this.ExecuteAdbCommand("shell getprop ro.bootloader", device);
-			string arg9 = this.ExecuteAdbCommand("shell getprop ro.build.version.security_patch", device);
-			string arg10 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", device);
-			string arg11 = this.ExecuteAdbCommand("shell getprop ro.soc.manufacturer", device);
-			string arg12 = this.ExecuteAdbCommand("shell getprop ro.soc.model", device);
-			string arg13 = this.ExecuteAdbCommand("shell getprop ro.config.cpu_info_display", device);
-			string arg14 = this.ExecuteAdbCommand("shell getprop gsm.sim.state", device);
-			string arg15 = this.ExecuteAdbCommand("shell getprop persist.sys.usb.config", device);
-			string text2 = this.ExecuteAdbCommand("shell getprop ro.build.fingerprint", device);
-			string parcelRaw = this.ExecuteAdbCommand("shell service call iphonesubinfo 1 s16 com.android.shell", device);
-			string arg16 = this.LimpiarIMEI(parcelRaw);
-			this.txtOutput.AppendText(string.Format("SN : {0}", arg) + Environment.NewLine);
-			this.txtOutput.AppendText(string.Format("Brand : {0}", arg2));
-			this.txtOutput.AppendText(string.Format("CodeName : {0}", arg3));
-			this.txtOutput.AppendText(string.Format("Model : {0}", text));
-			this.txtOutput.AppendText(string.Format("Version : {0}", arg4));
-			this.txtOutput.AppendText(string.Format("Region : {0}", arg5));
-			this.txtOutput.AppendText(string.Format("Android : {0}", arg7));
-			this.txtOutput.AppendText(string.Format("Security : {0}", arg9));
-			this.txtOutput.AppendText(string.Format("Bootloader : {0}", arg8));
-			this.txtOutput.AppendText(string.Format("CP : {0}", arg10));
-			this.txtOutput.AppendText(string.Format("CarrierId : {0}", arg6));
-			this.txtOutput.AppendText(string.Format("Cpu : {0}", arg11));
-			this.txtOutput.AppendText(string.Format("Cpu Type : {0}", arg12));
-			this.txtOutput.AppendText(string.Format("Hardware ID : {0}", arg13));
-			this.txtOutput.AppendText(string.Format("SIM State : {0}", arg14));
-			this.txtOutput.AppendText(string.Format("USB Config : {0}", arg15));
-			this.txtOutput.AppendText(string.Format("IMEI : {0}", arg16));
+			string arg2 = this.ExecuteAdbCommand("shell getprop ro.product.model", device);
+			string arg3 = this.ExecuteAdbCommand("shell getprop ro.build.version.emui", device);
+			string arg4 = this.ExecuteAdbCommand("shell getprop ro.config.hw_custver", device);
+			string arg5 = this.ExecuteAdbCommand("shell getprop ro.hw_oemversion", device);
+			this.txtOutput.AppendText("\ud83d\udcf1 Huawei Device" + Environment.NewLine);
+			this.txtOutput.AppendText(string.Format("SN: {0}", arg) + Environment.NewLine);
+			this.txtOutput.AppendText(string.Format("Model: {0}", arg2) + Environment.NewLine);
+			this.txtOutput.AppendText(string.Format("EMUI: {0}", arg3) + Environment.NewLine);
+			this.txtOutput.AppendText(string.Format("Cust Ver: {0}", arg4) + Environment.NewLine);
+			this.txtOutput.AppendText(string.Format("Vendor: {0}", arg5) + Environment.NewLine);
+		}
+
+		// Token: 0x06000085 RID: 133 RVA: 0x00007A94 File Offset: 0x00005C94
+		private void LeerHonor(string device)
+		{
+			this.txtOutput.Clear();
+			string arg = this.ExecuteAdbCommand("shell getprop ro.product.manufacturer", device);
+			string arg2 = this.ExecuteAdbCommand("shell getprop ro.boot.serialno", device);
+			string text = this.ExecuteAdbCommand("shell getprop ro.product.model", device);
+			string arg3 = this.ExecuteAdbCommand("shell getprop ro.build.version.release", device);
+			string arg4 = this.ExecuteAdbCommand("shell getprop ro.build.version.security_patch", device);
+			string text2 = this.ExecuteAdbCommand("shell getprop ro.build.display.id", device);
+			string arg5 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", device);
+			string arg6 = this.ExecuteAdbCommand("shell getprop ro.hardware", device);
+			string arg7 = this.ExecuteAdbCommand("shell getprop gsm.sim.state", device);
+			string arg8 = this.ExecuteAdbCommand("shell getprop ro.carrier", device);
+			string arg9 = this.ExecuteAdbCommand("shell getprop ro.build.display.id", device);
+			string text3 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", device);
+			string arg10 = this.ExecuteAdbCommand("shell getprop ro.config.cpu_info_display", device);
+			string arg11 = this.ExecuteAdbCommand("shell getprop ro.soc.model", device);
+			this.txtOutput.AppendText(string.Format("- Connecting ... {0}", arg2) + Environment.NewLine);
+			this.txtOutput.AppendText(string.Format("Marca: {0}", arg));
+			this.txtOutput.AppendText(string.Format("model: {0}", text));
+			this.txtOutput.AppendText(string.Format("SN: {0}", arg2));
+			this.txtOutput.AppendText(string.Format("Android: {0}", arg3));
+			this.txtOutput.AppendText(string.Format("Parche: {0}", arg4));
+			this.txtOutput.AppendText(string.Format("Hardware: {0}", arg6));
+			this.txtOutput.AppendText(string.Format("Carrier ID: {0}", arg8));
+			this.txtOutput.AppendText(string.Format("Compilacion: {0}", arg9));
+			this.txtOutput.AppendText(string.Format("SIM: {0}", arg7));
+			this.txtOutput.AppendText(string.Format("Baseband: {0}", arg5));
+			this.txtOutput.AppendText(string.Format("Procoesador: {0}", arg10));
+			this.txtOutput.AppendText(string.Format("Modelo Procesador: {0}", arg11));
 			this.GuardarEnArchivo(text, this.txtOutput.Text);
 			this.TextBox1.Text = "Log guardado en: \\Logs\\" + text;
 		}
 
-		// Token: 0x0600009A RID: 154 RVA: 0x00008164 File Offset: 0x00006364
+		// Token: 0x06000086 RID: 134 RVA: 0x00007CD8 File Offset: 0x00005ED8
 		private void LeerOnePlus(string device)
 		{
 			this.txtOutput.Clear();
@@ -4623,276 +3623,7 @@ namespace Tstool
 			this.txtOutput.AppendText(string.Format("Baseband: {0}", arg5) + Environment.NewLine);
 		}
 
-		// Token: 0x0600009B RID: 155 RVA: 0x00008284 File Offset: 0x00006484
-		private void LeerVivo(string device)
-		{
-			string arg = this.ExecuteAdbCommand("shell getprop ro.boot.serialno", device);
-			string arg2 = this.ExecuteAdbCommand("shell getprop ro.product.manufacturer", device);
-			string arg3 = this.ExecuteAdbCommand("shell getprop ro.product.model", device);
-			string text = this.ExecuteAdbCommand("shell getprop ro.vivo.product.release.name", device);
-			string arg4 = this.ExecuteAdbCommand("shell getprop gsm.operator.iso-country", device);
-			string arg5 = this.ExecuteAdbCommand("shell getprop ro.oem.key1", device);
-			string arg6 = this.ExecuteAdbCommand("shell getprop ro.oem.key1", device);
-			string arg7 = this.ExecuteAdbCommand("shell getprop ro.build.version.release", device);
-			string arg8 = this.ExecuteAdbCommand("shell getprop ro.bootloader", device);
-			string arg9 = this.ExecuteAdbCommand("shell getprop ro.build.version.security_patch", device);
-			string arg10 = this.ExecuteAdbCommand("shell getprop gsm.version.baseband", device);
-			string arg11 = this.ExecuteAdbCommand("shell getprop ro.soc.manufacturer", device);
-			string arg12 = this.ExecuteAdbCommand("shell getprop ro.soc.model", device);
-			string arg13 = this.ExecuteAdbCommand("shell getprop ro.config.cpu_info_display", device);
-			string arg14 = this.ExecuteAdbCommand("shell getprop gsm.sim.state", device);
-			string arg15 = this.ExecuteAdbCommand("shell getprop persist.sys.usb.config", device);
-			string text2 = this.ExecuteAdbCommand("shell getprop ro.build.fingerprint", device);
-			string parcelRaw = this.ExecuteAdbCommand("shell service call iphonesubinfo 1 s16 com.android.shell", device);
-			string arg16 = this.LimpiarIMEI(parcelRaw);
-			this.txtOutput.AppendText("\ud83d\udcf1 Vivo Device" + Environment.NewLine);
-			this.txtOutput.AppendText(string.Format("SN : {0}", arg));
-			this.txtOutput.AppendText(string.Format("Brand : {0}", arg2));
-			this.txtOutput.AppendText(string.Format("CodeName : {0}", arg3));
-			this.txtOutput.AppendText(string.Format("Model : {0}", text));
-			this.txtOutput.AppendText(string.Format("Version : {0}", arg4));
-			this.txtOutput.AppendText(string.Format("Region : {0}", arg5));
-			this.txtOutput.AppendText(string.Format("Android : {0}", arg7));
-			this.txtOutput.AppendText(string.Format("Security : {0}", arg9));
-			this.txtOutput.AppendText(string.Format("Bootloader : {0}", arg8));
-			this.txtOutput.AppendText(string.Format("CP : {0}", arg10));
-			this.txtOutput.AppendText(string.Format("CarrierId : {0}", arg6));
-			this.txtOutput.AppendText(string.Format("Cpu : {0}", arg11));
-			this.txtOutput.AppendText(string.Format("Cpu Type : {0}", arg12));
-			this.txtOutput.AppendText(string.Format("Hardware ID : {0}", arg13));
-			this.txtOutput.AppendText(string.Format("SIM State : {0}", arg14));
-			this.txtOutput.AppendText(string.Format("USB Config : {0}", arg15));
-			this.txtOutput.AppendText(string.Format("IMEI : {0}", arg16));
-			this.GuardarEnArchivo(text, this.txtOutput.Text);
-			this.TextBox1.Text = "Log guardado en: \\Logs\\" + text;
-		}
-
-		// Token: 0x0600009C RID: 156 RVA: 0x00008570 File Offset: 0x00006770
-		private string LimpiarIMEI(string parcelRaw)
-		{
-			string result;
-			try
-			{
-				string text = "";
-				string[] array = parcelRaw.Split(new string[]
-				{
-					"\n",
-					"\r\n"
-				}, StringSplitOptions.RemoveEmptyEntries);
-				foreach (string text2 in array)
-				{
-					bool flag = text2.Contains("'");
-					if (flag)
-					{
-						string[] array3 = text2.Split(new char[]
-						{
-							'\''
-						});
-						bool flag2 = array3.Length > 1;
-						if (flag2)
-						{
-							text += array3[1].Replace(".", "").Replace(" ", "").Replace("'", "");
-						}
-					}
-				}
-				result = text.Trim();
-			}
-			catch (Exception ex)
-			{
-				result = "Error al limpiar IMEI";
-			}
-			return result;
-		}
-
-		// Token: 0x0600009D RID: 157 RVA: 0x00008668 File Offset: 0x00006868
-		private void SetUiState(bool running)
-		{
-			this.btnopenfwmt.Enabled = !running;
-			this.btnCancelarProceso.Enabled = running;
-		}
-
-		// Token: 0x0600009E RID: 158 RVA: 0x00008688 File Offset: 0x00006888
-		private async void btnOpenFwMt_Click(object sender, EventArgs e)
-		{
-			bool flag = this.processRunning;
-			if (flag)
-			{
-				MessageBox.Show("⚠ Ya hay un proceso en ejecución. Por favor, espera a que termine.");
-			}
-			else
-			{
-				this.processRunning = true;
-				this.btnCancelarProceso.Enabled = true;
-				this.SetAllButtonsEnabled(false, null);
-				this.ListView1.Visible = true;
-				this.ProgressBar1.Value = 0;
-				string baseUrl = "https://mirrors.lolinet.com/firmware/lenomola/";
-				string[] years = new string[]
-				{
-					"2025",
-					"2024",
-					"2023",
-					"2022"
-				};
-				try
-				{
-					bool ok = await this.CargarFirmwaresCompatiblesAsync(baseUrl, years);
-					if (!ok)
-					{
-						this.txtOutput.AppendText("❌ No se encontraron firmwares compatibles.\r\n");
-						string textoPlano = this.LimpiarTexto(this.txtOutput.Text);
-						string codename = this.ExtraerValorDesdeTexto(textoPlano, "Codename:");
-						foreach (string y in years)
-						{
-							string fallbackUrl = string.Format("{0}{1}/{2}/official/", baseUrl, y, codename);
-							this.txtOutput.AppendText(string.Format("\ud83d\udd0d Probando carpeta genérica: {0}{1}", fallbackUrl, "\r\n"));
-							if (await this.UrlExisteAsync(fallbackUrl))
-							{
-								this.txtOutput.AppendText(string.Format("\ud83d\udd17 Abriendo carpeta genérica: {0}{1}", fallbackUrl, "\r\n"));
-								try
-								{
-									Process.Start(new ProcessStartInfo(fallbackUrl)
-									{
-										UseShellExecute = true
-									});
-								}
-								catch (Exception ex)
-								{
-									this.txtOutput.AppendText("⚠️ Error al abrir navegador: " + ex.Message + "\r\n");
-								}
-								break;
-							}
-						}
-					}
-					else
-					{
-						this.txtOutput.AppendText("✅ Firmwares compatibles agregados al listado.\r\n");
-					}
-				}
-				catch (OperationCanceledException ex3)
-				{
-					this.txtOutput.AppendText("⚠ Operación cancelada por el usuario.\r\n");
-				}
-				catch (Exception ex2)
-				{
-					MessageBox.Show("❌ Error inesperado: " + ex2.Message);
-				}
-				finally
-				{
-					this.processRunning = false;
-					this.btnCancelarProceso.Enabled = false;
-					this.SetAllButtonsEnabled(true, null);
-				}
-			}
-		}
-
-		// Token: 0x0600009F RID: 159 RVA: 0x000086D0 File Offset: 0x000068D0
-		private async Task<bool> CargarFirmwaresCompatiblesAsync(string baseUrl, IEnumerable<string> years)
-		{
-			this.ConfigurarListView();
-			string textoPlano = this.LimpiarTexto(this.txtOutput.Text);
-			string codename = this.ExtraerValorDesdeTexto(textoPlano, "Codename:");
-			string carrierid = this.ExtraerValorDesdeTexto(textoPlano, "Carrier ID:");
-			bool flag = string.IsNullOrWhiteSpace(codename) || string.IsNullOrWhiteSpace(carrierid);
-			bool result;
-			if (flag)
-			{
-				MessageBox.Show("Primero leer dispositivo en Fastboot");
-				result = false;
-			}
-			else
-			{
-				IEnumerable<string> vars = CarrierHelper.GetVariations(carrierid);
-				bool foundAny = false;
-				try
-				{
-					foreach (string yearStr in years)
-					{
-						try
-						{
-							foreach (string carrierVar in vars)
-							{
-								string dirUrl = string.Format("{0}{1}/{2}/official/{3}/", new object[]
-								{
-									baseUrl,
-									yearStr,
-									codename,
-									carrierVar
-								});
-								this.txtOutput.AppendText("\ud83d\udd17 Buscando:\r\n");
-								bool flag2 = await this.UrlExisteAsync(dirUrl);
-								if (flag2)
-								{
-									this.txtOutput.AppendText(string.Format("✅ Carpeta válida: {0}", dirUrl) + "\r\n");
-									string html = this.DescargarHtml(dirUrl);
-									List<string> archivos = this.ObtenerListaDeZips(html);
-									try
-									{
-										foreach (string archivo in archivos)
-										{
-											if (archivo.IndexOf(codename, StringComparison.OrdinalIgnoreCase) >= 0)
-											{
-												string nombre = Path.GetFileName(archivo);
-												string fullUrl = dirUrl + nombre;
-												ListViewItem item = new ListViewItem(nombre);
-												item.SubItems.Add(yearStr);
-												item.SubItems.Add(fullUrl);
-												this.ListView1.Items.Add(item);
-												foundAny = true;
-											}
-										}
-									}
-									finally
-									{
-										List<string>.Enumerator enumerator3;
-										((IDisposable)enumerator3).Dispose();
-									}
-									break;
-								}
-							}
-						}
-						finally
-						{
-							IEnumerator<string> enumerator2;
-							if (enumerator2 != null)
-							{
-								enumerator2.Dispose();
-							}
-						}
-						if (foundAny)
-						{
-							break;
-						}
-					}
-				}
-				finally
-				{
-					IEnumerator<string> enumerator;
-					if (enumerator != null)
-					{
-						enumerator.Dispose();
-					}
-				}
-				result = foundAny;
-			}
-			return result;
-		}
-
-		// Token: 0x060000A0 RID: 160 RVA: 0x00008724 File Offset: 0x00006924
-		private async Task<string> DescargarHtmlAsync(string url)
-		{
-			string result;
-			using (HttpClient client = new HttpClient
-			{
-				Timeout = TimeSpan.FromSeconds(10.0)
-			})
-			{
-				result = await client.GetStringAsync(url);
-			}
-			return result;
-		}
-
-		// Token: 0x060000A1 RID: 161 RVA: 0x00008770 File Offset: 0x00006970
+		// Token: 0x06000087 RID: 135 RVA: 0x00007DF8 File Offset: 0x00005FF8
 		private void btndwlfwmt_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -4905,7 +3636,6 @@ namespace Tstool
 				this.processRunning = true;
 				this.cancelRequested = false;
 				this.SetAllButtonsEnabled(false, null);
-				this.ListView1.Visible = true;
 				this.btnCancelarProceso.Enabled = true;
 				this.VerificarEntornoSeguro();
 				this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
@@ -4927,18 +3657,18 @@ namespace Tstool
 					this.btnCancelarProceso.Enabled = false;
 					base.Invoke(new VB$AnonymousDelegate_0(delegate()
 					{
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 					}));
 				}
 			}
 		}
 
-		// Token: 0x060000A2 RID: 162 RVA: 0x00008860 File Offset: 0x00006A60
+		// Token: 0x06000088 RID: 136 RVA: 0x00007EDC File Offset: 0x000060DC
 		private void AbrirFirmwareEnNavegador()
 		{
-			Form1._Closure$__122-0 CS$<>8__locals1 = new Form1._Closure$__122-0(CS$<>8__locals1);
+			Form1._Closure$__112-0 CS$<>8__locals1 = new Form1._Closure$__112-0(CS$<>8__locals1);
 			string texto = this.LimpiarTexto(this.txtOutput.Text);
-			string text = this.ExtraerValorDesdeTexto(texto, "Codename:");
+			string text = this.ExtraerValorDesdeTexto(texto, "Code name:");
 			string text2 = this.ExtraerValorDesdeTexto(texto, "Carrier ID:");
 			CS$<>8__locals1.$VB$Local_firmware = this.ExtraerValorDesdeTexto(texto, "Firmware:");
 			bool flag = string.IsNullOrEmpty(text) || string.IsNullOrEmpty(text2) || string.IsNullOrEmpty(CS$<>8__locals1.$VB$Local_firmware);
@@ -5005,7 +3735,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000A3 RID: 163 RVA: 0x00008A7C File Offset: 0x00006C7C
+		// Token: 0x06000089 RID: 137 RVA: 0x000080F8 File Offset: 0x000062F8
 		private bool UrlExiste(string url)
 		{
 			bool result;
@@ -5027,7 +3757,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x060000A4 RID: 164 RVA: 0x00008B10 File Offset: 0x00006D10
+		// Token: 0x0600008A RID: 138 RVA: 0x0000818C File Offset: 0x0000638C
 		private string DescargarHtml(string url)
 		{
 			string result;
@@ -5046,7 +3776,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x060000A5 RID: 165 RVA: 0x00008B84 File Offset: 0x00006D84
+		// Token: 0x0600008B RID: 139 RVA: 0x00008200 File Offset: 0x00006400
 		private List<string> ObtenerListaDeZips(string html)
 		{
 			List<string> list = new List<string>();
@@ -5070,13 +3800,56 @@ namespace Tstool
 			return list;
 		}
 
-		// Token: 0x060000A6 RID: 166 RVA: 0x00008C14 File Offset: 0x00006E14
+		// Token: 0x0600008C RID: 140 RVA: 0x00008290 File Offset: 0x00006490
+		private async void btnopenfwmt_Click(object sender, EventArgs e)
+		{
+			bool flag = this.processRunning;
+			if (flag)
+			{
+				MessageBox.Show("⚠ Ya hay un proceso en ejecución. Por favor, espera a que termine.");
+			}
+			else
+			{
+				this.processRunning = true;
+				this.cancelRequested = false;
+				this.SetAllButtonsEnabled(false, null);
+				this.btnCancelarProceso.Enabled = true;
+				this.VerificarEntornoSeguro();
+				this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
+				{
+					this.InitializeProgressBar(2);
+					this.UpdateProgressBar();
+				}));
+				try
+				{
+					await this.AbrirUrlsDeFirmwareDesdeLogAsync();
+				}
+				catch (Exception ex)
+				{
+					MessageBox.Show("❌ Error inesperado: " + ex.Message);
+				}
+				finally
+				{
+					this.processRunning = false;
+					this.btnCancelarProceso.Enabled = false;
+					if (this.permisosUsuario != null)
+					{
+						this.Invoke(new VB$AnonymousDelegate_0(delegate()
+						{
+							this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
+						}));
+					}
+				}
+			}
+		}
+
+		// Token: 0x0600008D RID: 141 RVA: 0x000082D8 File Offset: 0x000064D8
 		private async Task AbrirUrlsDeFirmwareDesdeLogAsync()
 		{
 			try
 			{
 				string textoPlano = this.LimpiarTexto(this.txtOutput.Text);
-				string codename = this.ExtraerValorDesdeTexto(textoPlano, "Codename:");
+				string codename = this.ExtraerValorDesdeTexto(textoPlano, "Code name:");
 				string carrierid = this.ExtraerValorDesdeTexto(textoPlano, "Carrier ID:");
 				bool flag = string.IsNullOrWhiteSpace(codename) || string.IsNullOrWhiteSpace(carrierid);
 				if (flag)
@@ -5093,100 +3866,72 @@ namespace Tstool
 					};
 					string[] years = new string[]
 					{
-						"2025",
-						"2024",
+						"2021",
+						"2022",
 						"2023",
-						"2022"
+						"2024",
+						"2025"
 					};
-					string raw = carrierid.Trim();
-					string[] carrierVariations = new string[]
-					{
-						raw,
-						raw.ToUpperInvariant(),
-						raw.ToLowerInvariant(),
-						Conversions.ToString(char.ToUpperInvariant(raw[0])) + raw.Substring(1).ToLowerInvariant()
-					};
-					string lastBase = "";
-					string lastYear = "";
+					bool encontrado = false;
 					foreach (string baseUrl in baseUrls)
 					{
-						lastBase = baseUrl;
-						foreach (string yearStr in years)
+						foreach (string year in years)
 						{
-							lastYear = yearStr;
-							foreach (string carrierVar in carrierVariations)
+							string fullUrl = string.Format("{0}{1}/{2}/official/{3}/", new object[]
 							{
-								string fullUrl = string.Format("{0}{1}/{2}/official/{3}/", new object[]
+								baseUrl,
+								year,
+								codename,
+								carrierid.ToUpper()
+							});
+							bool flag2 = await this.UrlExisteAsync(fullUrl);
+							if (flag2)
+							{
+								this.txtOutput.AppendText(string.Format("✅ Directorio de firmware encontrado:{0}", Environment.NewLine));
+								try
 								{
-									baseUrl,
-									yearStr,
-									codename,
-									carrierVar
-								});
-								bool flag2 = await this.UrlExisteAsync(fullUrl);
-								if (flag2)
-								{
-									this.txtOutput.AppendText(string.Format("✅ Encontrado: {0}{1}", fullUrl, Environment.NewLine));
-									try
+									Process.Start(new ProcessStartInfo
 									{
-									}
-									catch (Exception ex3)
-									{
-									}
-									return;
+										FileName = fullUrl,
+										UseShellExecute = true
+									});
 								}
+								catch (Exception ex)
+								{
+									this.txtOutput.AppendText("⚠️ Error al abrir el navegador: " + ex.Message + Environment.NewLine);
+								}
+								encontrado = true;
+								break;
 							}
 						}
-					}
-					string errorUrl = string.Format("{0}{1}/{2}/official/", lastBase, lastYear, codename);
-					this.txtOutput.AppendText(string.Format("\ud83d\udeab No se encontró ningún directorio válido. Abriendo: {0}{1}", errorUrl, Environment.NewLine));
-					try
-					{
-						Process.Start(new ProcessStartInfo(errorUrl)
+						if (encontrado)
 						{
-							UseShellExecute = true
-						});
+							break;
+						}
 					}
-					catch (Exception ex)
+					if (!encontrado)
 					{
-						this.txtOutput.AppendText("⚠️ Error al abrir navegador: " + ex.Message + Environment.NewLine);
+						this.txtOutput.AppendText("\ud83d\udeab No se encontró ningún directorio válido." + Environment.NewLine);
 					}
 				}
 			}
 			catch (Exception ex2)
 			{
-				MessageBox.Show("❌ Error inesperado: " + ex2.Message);
+				MessageBox.Show("❌ Error: " + ex2.Message);
 			}
 		}
 
-		// Token: 0x060000A7 RID: 167 RVA: 0x00008C58 File Offset: 0x00006E58
+		// Token: 0x0600008E RID: 142 RVA: 0x0000831C File Offset: 0x0000651C
 		private async Task<bool> UrlExisteAsync(string url)
 		{
 			bool result;
 			try
 			{
-				using (HttpClient client = new HttpClient
+				using (HttpClient client = new HttpClient())
 				{
-					Timeout = TimeSpan.FromSeconds(5.0)
-				})
-				{
-					using (HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Head, url))
-					{
-						HttpResponseMessage resp = await client.SendAsync(req);
-						if (resp.IsSuccessStatusCode)
-						{
-							result = true;
-						}
-						else if (resp.StatusCode == HttpStatusCode.MethodNotAllowed || resp.StatusCode == HttpStatusCode.Forbidden)
-						{
-							HttpResponseMessage respGet = await client.GetAsync(url);
-							result = respGet.IsSuccessStatusCode;
-						}
-						else
-						{
-							result = false;
-						}
-					}
+					client.Timeout = TimeSpan.FromSeconds(5.0);
+					HttpResponseMessage response = await client.SendAsync(new HttpRequestMessage(HttpMethod.Head, url));
+					result = response.IsSuccessStatusCode;
 				}
 			}
 			catch (Exception ex)
@@ -5196,7 +3941,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x060000A8 RID: 168 RVA: 0x00008CA4 File Offset: 0x00006EA4
+		// Token: 0x0600008F RID: 143 RVA: 0x00008368 File Offset: 0x00006568
 		private string ExtraerValorDesdeTexto(string texto, string etiqueta)
 		{
 			Regex regex = new Regex(string.Format("{0}\\s*(.*)", Regex.Escape(etiqueta)), RegexOptions.IgnoreCase);
@@ -5216,7 +3961,7 @@ namespace Tstool
 			return "";
 		}
 
-		// Token: 0x060000A9 RID: 169 RVA: 0x00008D44 File Offset: 0x00006F44
+		// Token: 0x06000090 RID: 144 RVA: 0x00008408 File Offset: 0x00006608
 		private string ExtraerFirmwareDeLineasSeparadas(string linea0, string linea1)
 		{
 			string text = "";
@@ -5271,7 +4016,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000AA RID: 170 RVA: 0x00008EA0 File Offset: 0x000070A0
+		// Token: 0x06000091 RID: 145 RVA: 0x00008564 File Offset: 0x00006764
 		private void btnmdmnewatt_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -5382,16 +4127,16 @@ namespace Tstool
 				finally
 				{
 					this.processRunning = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 					this.btnCancelarProceso.Enabled = false;
 				}
 				this.processRunning = false;
 				this.btnCancelarProceso.Enabled = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 			}
 		}
 
-		// Token: 0x060000AB RID: 171 RVA: 0x0000920C File Offset: 0x0000740C
+		// Token: 0x06000092 RID: 146 RVA: 0x000088DC File Offset: 0x00006ADC
 		private void btnCleanMotoApps_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -5566,7 +4311,7 @@ namespace Tstool
 							},
 							{
 								"MDM Tel 2",
-								"com.taboola.mip"
+								"om.taboola.mip"
 							},
 							{
 								"Paks",
@@ -5624,13 +4369,13 @@ namespace Tstool
 				finally
 				{
 					this.processRunning = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 					this.btnCancelarProceso.Enabled = false;
 				}
 			}
 		}
 
-		// Token: 0x060000AC RID: 172 RVA: 0x000096EC File Offset: 0x000078EC
+		// Token: 0x06000093 RID: 147 RVA: 0x00008DC0 File Offset: 0x00006FC0
 		private void btnCleanMotoApps2024_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -5654,7 +4399,7 @@ namespace Tstool
 				{
 					try
 					{
-						Form1._Closure$__132-0 CS$<>8__locals1 = new Form1._Closure$__132-0(CS$<>8__locals1);
+						Form1._Closure$__123-0 CS$<>8__locals1 = new Form1._Closure$__123-0(CS$<>8__locals1);
 						CS$<>8__locals1.$VB$Me = this;
 						CS$<>8__locals1.$VB$Local_selectedDevice = "";
 						CS$<>8__locals1.$VB$Local_devices = this.GetAdbDevices();
@@ -5877,15 +4622,15 @@ namespace Tstool
 					}
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				});
 				this.processRunning = false;
 				this.btnCancelarProceso.Enabled = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 			}
 		}
 
-		// Token: 0x060000AD RID: 173 RVA: 0x00009784 File Offset: 0x00007984
+		// Token: 0x06000094 RID: 148 RVA: 0x00008E5C File Offset: 0x0000705C
 		public List<string> VerificarEstadoPaquetes(Dictionary<string, string> paquetes, string selectedDevice)
 		{
 			List<string> list = new List<string>();
@@ -5915,7 +4660,7 @@ namespace Tstool
 			return list;
 		}
 
-		// Token: 0x060000AE RID: 174 RVA: 0x00009844 File Offset: 0x00007A44
+		// Token: 0x06000095 RID: 149 RVA: 0x00008F1C File Offset: 0x0000711C
 		public void MostrarEstadoAntesDelProceso(string titulo, Dictionary<string, string> paquetesDict, string selectedDevice)
 		{
 			this.txtOutput.AppendText(Environment.NewLine + string.Format("\ud83d\udd0d Estado antes del proceso: {0}", titulo) + Environment.NewLine);
@@ -5952,12 +4697,12 @@ namespace Tstool
 			this.txtOutput.AppendText("\ud83d\udd0d⚠️ Revisa los bloqueos antes de continuar con el proceso." + Environment.NewLine);
 		}
 
-		// Token: 0x060000AF RID: 175 RVA: 0x0000996C File Offset: 0x00007B6C
+		// Token: 0x06000096 RID: 150 RVA: 0x00009044 File Offset: 0x00007244
 		public void MostrarEstadoDespuesDelProceso(string titulo, Dictionary<string, string> paquetesDict, string selectedDevice)
 		{
 			this.txtOutput.AppendText(Environment.NewLine + "\ud83d\udd0d Verificando después del proceso:" + Environment.NewLine);
 			List<string> list = this.VerificarEstadoPaquetes(paquetesDict, selectedDevice);
-			List<string> list2 = list.Where((Form1._Closure$__.$I135-0 == null) ? (Form1._Closure$__.$I135-0 = ((string x) => x.Contains("Active."))) : Form1._Closure$__.$I135-0).ToList<string>();
+			List<string> list2 = list.Where((Form1._Closure$__.$I126-0 == null) ? (Form1._Closure$__.$I126-0 = ((string x) => x.Contains("Active."))) : Form1._Closure$__.$I126-0).ToList<string>();
 			try
 			{
 				foreach (string str in list)
@@ -5993,7 +4738,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000B0 RID: 176 RVA: 0x00009ADC File Offset: 0x00007CDC
+		// Token: 0x06000097 RID: 151 RVA: 0x000091B4 File Offset: 0x000073B4
 		private async void btnConsultarPosiblesBloqueos_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -6008,7 +4753,6 @@ namespace Tstool
 				this.SetAllButtonsEnabled(false, null);
 				this.btnCancelarProceso.Enabled = true;
 				this.VerificarEntornoSeguro();
-				this.ListView1.Visible = false;
 				this.txtOutput.Clear();
 				this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
 				{
@@ -6069,7 +4813,7 @@ namespace Tstool
 					finally
 					{
 						this.processRunning = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 						this.btnCancelarProceso.Enabled = false;
 					}
 				}, token);
@@ -6086,13 +4830,14 @@ namespace Tstool
 				}
 				this.processRunning = false;
 				this.btnCancelarProceso.Enabled = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 			}
 		}
 
-		// Token: 0x060000B1 RID: 177 RVA: 0x00009B24 File Offset: 0x00007D24
+		// Token: 0x06000098 RID: 152 RVA: 0x000091FC File Offset: 0x000073FC
 		public void MostrarSoloBloqueosDispositivo1(string nombreProceso, string selectedDevice)
 		{
+			this.txtOutput.Clear();
 			this.InitializeProgressBar(2);
 			this.UpdateProgressBar();
 			this.txtOutput.AppendText(Environment.NewLine + string.Format("\ud83d\udd0d Estado del dispositivo: {0}", nombreProceso) + Environment.NewLine);
@@ -6114,9 +4859,10 @@ namespace Tstool
 			this.UpdateProgressBar();
 		}
 
-		// Token: 0x060000B2 RID: 178 RVA: 0x00009C04 File Offset: 0x00007E04
+		// Token: 0x06000099 RID: 153 RVA: 0x000092E8 File Offset: 0x000074E8
 		public List<string> VerificarBloqueosPosibles(string selectedDevice)
 		{
+			this.txtOutput.Clear();
 			this.InitializeProgressBar(2);
 			this.UpdateProgressBar();
 			List<string> list = new List<string>();
@@ -6167,7 +4913,7 @@ namespace Tstool
 			return list;
 		}
 
-		// Token: 0x060000B3 RID: 179 RVA: 0x00009DC4 File Offset: 0x00007FC4
+		// Token: 0x0600009A RID: 154 RVA: 0x000094B4 File Offset: 0x000076B4
 		public Dictionary<string, string> ObtenerDiccionarioBloqueos()
 		{
 			return new Dictionary<string, string>
@@ -6339,7 +5085,7 @@ namespace Tstool
 			};
 		}
 
-		// Token: 0x060000B4 RID: 180 RVA: 0x0000A094 File Offset: 0x00008294
+		// Token: 0x0600009B RID: 155 RVA: 0x00009784 File Offset: 0x00007984
 		public Dictionary<string, string> ObtenerDiccionarioBloqueosPixel()
 		{
 			return new Dictionary<string, string>
@@ -6411,7 +5157,7 @@ namespace Tstool
 			};
 		}
 
-		// Token: 0x060000B5 RID: 181 RVA: 0x0000A1BC File Offset: 0x000083BC
+		// Token: 0x0600009C RID: 156 RVA: 0x000098AC File Offset: 0x00007AAC
 		private void btnCheckVirusOffline_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -6426,7 +5172,6 @@ namespace Tstool
 				this.SetAllButtonsEnabled(false, null);
 				this.btnCancelarProceso.Enabled = true;
 				this.VerificarEntornoSeguro();
-				this.ListView1.Visible = false;
 				this.txtOutput.Clear();
 				this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
 				{
@@ -6459,7 +5204,7 @@ namespace Tstool
 					finally
 					{
 						this.processRunning = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 						this.btnCancelarProceso.Enabled = false;
 					}
 					this.UpdateProgressBar();
@@ -6467,7 +5212,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000B6 RID: 182 RVA: 0x0000A250 File Offset: 0x00008450
+		// Token: 0x0600009D RID: 157 RVA: 0x00009934 File Offset: 0x00007B34
 		public void ConsultarPosiblesVirusDispositivo(string nombreProceso, string selectedDevice)
 		{
 			try
@@ -6521,86 +5266,14 @@ namespace Tstool
 			}
 			this.processRunning = false;
 			this.btnCancelarProceso.Enabled = false;
-			this.AplicarPermisosDesdeFirebasePorPlan();
+			this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 		}
 
-		// Token: 0x060000B7 RID: 183 RVA: 0x0000A41C File Offset: 0x0000861C
+		// Token: 0x0600009E RID: 158 RVA: 0x00009B04 File Offset: 0x00007D04
 		public Dictionary<string, string> ObtenerDiccionarioVirus()
 		{
 			return new Dictionary<string, string>
 			{
-				{
-					"Tijuana Seguro",
-					"com.tijuana.seguro"
-				},
-				{
-					"Daily Cleaner DC",
-					"dc.daily.cleaner"
-				},
-				{
-					"Deep Cleaner DC",
-					"dcdeep.deep.cleaner"
-				},
-				{
-					"GO Cleaner",
-					"go.cleaner.junk.clean.app"
-				},
-				{
-					"Google Contact Keys",
-					"com.google.android.contactkeys"
-				},
-				{
-					"ChromaZone PaintKit",
-					"com.inkrise.chromazone.paintkit"
-				},
-				{
-					"EZ Photo Video Recovery",
-					"allrecovery.recoverdeletedphotovideo.ezrecovery"
-				},
-				{
-					"Spider Solitaire Mobilityware",
-					"com.mobilityware.spider"
-				},
-				{
-					"SAGTJD NWDGuy",
-					"com.sagtjd.nwdguy"
-				},
-				{
-					"TikTok Live Wallpaper",
-					"com.zhiliao.musically.livewallpaper"
-				},
-				{
-					"AZ Recovery",
-					"photovideorecovery.recoverdeletedfilesphotovideo.azrecovery"
-				},
-				{
-					"Swift Files",
-					"sf.swift.files"
-				},
-				{
-					"Klondike Solitaire",
-					"com.smilerlee.klondike"
-				},
-				{
-					"Google Bard",
-					"com.google.android.apps.bard"
-				},
-				{
-					"QQQ Cleaner",
-					"qc.qqq.cleaner"
-				},
-				{
-					"BoostLoop CleanX",
-					"com.boostloop.wiperight.cleanx"
-				},
-				{
-					"Body Balance App",
-					"com.body.balance"
-				},
-				{
-					"PureFone CleanMaster",
-					"com.purefone.cleanmastera"
-				},
 				{
 					"AB InBev Bees México",
 					"com.abinbev.android.tapwiser.beesMexico"
@@ -6742,6 +5415,66 @@ namespace Tstool
 					"com.bigduckgames.flow"
 				},
 				{
+					"Gmail",
+					"com.google.android.gm"
+				},
+				{
+					"Google AR Core",
+					"com.google.ar.core"
+				},
+				{
+					"Google Contact Keys",
+					"com.google.android.contactkeys"
+				},
+				{
+					"Google Docs",
+					"com.google.android.apps.docs"
+				},
+				{
+					"Google Duo/Meet",
+					"com.google.android.apps.tachyon"
+				},
+				{
+					"Google Feedback",
+					"com.google.android.feedback"
+				},
+				{
+					"Google Home (Chromecast)",
+					"com.google.android.apps.chromecast.app"
+				},
+				{
+					"Google Music",
+					"com.google.android.music"
+				},
+				{
+					"Google One",
+					"com.google.android.apps.subscriptions.red"
+				},
+				{
+					"Google Partner Setup",
+					"com.google.android.partnersetup"
+				},
+				{
+					"Google Photos",
+					"com.google.android.apps.photos"
+				},
+				{
+					"Google SafetyCore",
+					"com.google.android.safetycore"
+				},
+				{
+					"Google Videos",
+					"com.google.android.videos"
+				},
+				{
+					"Google Wellbeing",
+					"com.google.android.apps.wellbeing"
+				},
+				{
+					"GMS Location History",
+					"com.google.android.gms.location.history"
+				},
+				{
 					"HapiCorp IMHapi",
 					"com.hapicorp.imhapi"
 				},
@@ -6780,6 +5513,10 @@ namespace Tstool
 				{
 					"Mobile Commander",
 					"com.manager.mobilecommander"
+				},
+				{
+					"Netflix",
+					"com.netflix.mediaclient"
 				},
 				{
 					"NoteCam",
@@ -6828,6 +5565,62 @@ namespace Tstool
 				{
 					"Rainy Day Reminder",
 					"com.drinkdepoly.watermoi.app"
+				},
+				{
+					"Samsung DA Agent",
+					"com.samsung.android.da.daagent"
+				},
+				{
+					"Samsung Daemon App",
+					"com.sec.android.daemonapp"
+				},
+				{
+					"Samsung Easy Mover",
+					"com.sec.android.easyMover"
+				},
+				{
+					"Samsung Internet",
+					"com.sec.android.app.sbrowser"
+				},
+				{
+					"Samsung Kids Home",
+					"com.sec.android.app.kidshome"
+				},
+				{
+					"Samsung Mobile Service",
+					"com.samsung.android.mobileservice"
+				},
+				{
+					"Samsung Notes Addons",
+					"com.samsung.android.app.notes.addons"
+				},
+				{
+					"Samsung OH",
+					"com.samsung.oh"
+				},
+				{
+					"Samsung OneConnect",
+					"com.samsung.android.oneconnect"
+				},
+				{
+					"Samsung Rubin App",
+					"com.samsung.android.rubin.app"
+				},
+				{
+					"Samsung S Page",
+					"com.samsung.android.app.spage"
+				},
+				{
+					"Samsung S Ree",
+					"com.samsung.sree"
+				},
+				{
+					"Samsung VOC Feedback",
+					"com.samsung.android.voc"
+				},
+				{
+					"Samsung Watch Manager",
+					"com.samsung.android.app.watchmanager"
 				},
 				{
 					"SayHi Nearby",
@@ -6946,393 +5739,17 @@ namespace Tstool
 					"com.tripledot.woodoku"
 				},
 				{
-					"battleblades",
-					"com.baset.battleblades"
-				},
-				{
 					"Word Search (PlaySimple)",
 					"in.playsimple.wordsearch"
 				},
 				{
-					"ScaleUp PlantID",
-					"com.scaleup.plantid"
-				},
-				{
-					"MM Android DMSS",
-					"com.mm.android.DMSS"
-				},
-				{
-					"Forecast Weather Severe Wind",
-					"com.forecast.weather.severe.wind"
-				},
-				{
-					"Google Duo",
-					"com.google.android.apps.tachyon"
-				},
-				{
-					"Alibaba Poseidon",
-					"com.alibaba.intl.android.apps.poseidon"
-				},
-				{
-					"Meeting Transcriber",
-					"com.codespaceapps.meetingtranscriber"
-				},
-				{
-					"Starkey NewLink",
-					"com.starkey.android.newlink.release"
-				},
-				{
-					"Mix VPN",
-					"com.mix.vpn"
-				},
-				{
-					"All Document Explorer",
-					"com.alldocumentexplor.ade"
-				},
-				{
-					"PDF Reader Editor Free",
-					"com.pdfreader.pdfeditor.pdfreadeforandroid.pdfeditorforandroidfree"
-				},
-				{
-					"DOCX Reader WordOffice",
-					"com.docxreader.documentreader.wordoffice"
-				},
-				{
-					"HT Routine PlanApp 2023",
-					"com.htroutine2023.planapp"
-				},
-				{
-					"Clean Planner",
-					"com.cleanplanner"
-				},
-				{
-					"Local Weather Radar Climate",
-					"com.localweather.radar.climate"
-				},
-				{
-					"FillPDF Editor PDFSign",
-					"com.fillpdf.pdfeditor.pdfsign"
-				},
-				{
-					"WSAndroid Suite",
-					"com.wsandroid.suite"
-				},
-				{
-					"DigitalFEMSA SpinPlus",
-					"com.digitalfemsa_spinplus"
-				},
-				{
-					"NFA Distance Meter",
-					"com.nfa.distancemeter"
-				},
-				{
-					"EZT PDF Reader Viewer",
-					"com.ezt.pdfreader.pdfviewer"
-				},
-				{
-					"CMU CleanMaster New",
-					"cmu.cleanmaster.new.app"
-				},
-				{
-					"ColorOS Translate",
-					"com.coloros.translate"
-				},
-				{
-					"Google ADM",
-					"com.google.android.apps.adm"
-				},
-				{
-					"Magical Smart Alban",
-					"com.magical.smart.alban"
-				},
-				{
-					"Document FilePro",
-					"com.document.filepro"
-				},
-				{
-					"Symantec Mobile Security",
-					"com.symantec.mobilesecurity"
-				},
-				{
-					"DMobileApps BarcodeScanner",
-					"com.dmobileapps.barcodescanner"
-				},
-				{
-					"OldOnch DeviceGuru",
-					"com.oldonch.deviceguru"
-				},
-				{
-					"MCPC Cleaner",
-					"mc.mcpc.cleaner"
-				},
-				{
-					"PDF Reader Viewer All Docs",
-					"pdf.reader.pdf.viewer.all.document.reader.office.viewer"
-				},
-				{
-					"Document Reader OfficeViewer",
-					"documentreader.officeviewer.filereader.all.doc"
-				},
-				{
-					"PDF Reader PDFViewer Free",
-					"pdfreader.pdfviewer.free.officetool"
-				},
-				{
-					"Eyalin DeviceDetailsHEB",
-					"eyalin.mydevicedetailsheb"
-				},
-				{
-					"EZPDF Reader Editor",
-					"com.ezpdf.read.view.editor.pdfreader.pdfviewer"
-				},
-				{
-					"Samsung Reminder",
-					"com.samsung.android.app.reminder"
-				},
-				{
-					"Samsung VOC",
-					"com.samsung.android.voc"
-				},
-				{
-					"Samsung Tips",
-					"com.samsung.android.app.tips"
-				},
-				{
-					"Samsung Find",
-					"com.samsung.android.app.find"
-				},
-				{
-					"Samsung S Page",
-					"com.samsung.android.app.spage"
-				},
-				{
-					"Samsung OneConnect",
-					"com.samsung.android.oneconnect"
-				},
-				{
-					"Samsung Watch Manager",
-					"com.samsung.android.app.watchmanager"
-				},
-				{
-					"Samsung Members Wallet",
-					"com.samsung.memberswallet"
-				},
-				{
-					"Samsung AR Zone",
-					"com.samsung.android.arzone"
-				},
-				{
-					"Samsung SREE",
-					"com.samsung.sree"
-				},
-				{
-					"Samsung Game Home",
-					"com.samsung.android.game.gamehome"
-				},
-				{
-					"Samsung Browser",
-					"com.sec.android.app.sbrowser"
-				},
-				{
-					"Shake Shack MX",
-					"com.shakeshackmx.shackapp"
-				},
-				{
-					"Blood Pressure Health App",
-					"com.blood.pressure.healthapp"
-				},
-				{
-					"Block Juggle",
-					"com.block.juggle"
-				},
-				{
-					"Quizlet",
-					"com.quizlet.quizletandroid"
-				},
-				{
-					"X Photo Kit",
-					"com.xphotokit.app"
-				},
-				{
-					"Ultra Recovery Core",
-					"com.ultrarecovery.core"
-				},
-				{
-					"CleanGAN GuruNM",
-					"com.cleangan.gurunm"
-				},
-				{
-					"VitaStudio Mahjong",
-					"com.vitastudio.mahjong"
-				},
-				{
-					"Samsung Kids Home",
-					"com.sec.android.app.kidshome"
-				},
-				{
-					"ShortEgo Drama Reels",
-					"com.shortego.dramareels"
-				},
-				{
-					"Tile Trip",
-					"com.oakever.tiletrip"
-				},
-				{
-					"ClearSense Cleaning",
-					"com.clearsense.cleaning"
-				},
-				{
-					"Unico Studio BallTubes",
-					"com.unicostudio.balltubes"
-				},
-				{
-					"AliExpress HD",
-					"com.alibaba.aliexpresshd"
-				},
-				{
-					"Cycle Recorder Heal",
-					"com.fem.cycle.recorderheal"
-				},
-				{
-					"Network Search",
-					"info.lamatricexiste.networksearch"
-				},
-				{
-					"SnapArt",
-					"net.diflib.snapart"
-				},
-				{
-					"AI Character App",
-					"ai.character.app"
-				},
-				{
-					"DocReader OfficeViewer All",
-					"all.documentreader.filereader.office.viewer"
-				},
-				{
-					"Sticker Studio StickTok",
-					"com.stickerstudio.sticktok"
-				},
-				{
-					"Native Messages",
-					"com.native.messages"
-				},
-				{
-					"HFest",
-					"fp.ftakhv.hfest"
-				},
-				{
-					"Fotostrana SweetMeet",
-					"ru.fotostrana.sweetmeet"
-				},
-				{
-					"Contacts PhoneCall",
-					"com.contacts.phonecall"
-				},
-				{
-					"Samsung Notes Addons",
-					"com.samsung.android.app.notes.addons"
-				},
-				{
-					"HiFun Drama Video",
-					"com.hifun.drama.video"
-				},
-				{
-					"Tala MX",
-					"mx.com.tala"
-				},
-				{
-					"EverMatch",
-					"com.evermatch"
-				},
-				{
-					"NatureClear Elenta Cleaner",
-					"com.natureclear.elenta.cleaner"
-				},
-				{
-					"MailTime Android",
-					"com.mailtime.android"
-				},
-				{
-					"Amazon Flex Rabbit",
-					"com.amazon.flex.rabbit"
-				},
-				{
-					"Crunchyroll Android",
-					"com.crunchyroll.crunchyroid"
-				},
-				{
-					"Procesar AforeMovil",
-					"mx.com.procesar.aforemovil"
-				},
-				{
-					"Education H Intelligence",
-					"com.education.android.h.intelligence"
-				},
-				{
-					"Goal Cleaner",
-					"com.cleaner.goal"
-				},
-				{
-					"Casaley App",
-					"mx.com.casaley.app"
-				},
-				{
-					"MusicPlayer Music",
-					"com.musicplayer.music"
-				},
-				{
-					"PagosDigitales PDMovil",
-					"com.pagosdigitales.pdmovil"
-				},
-				{
-					"Samsung Galaxy",
-					"com.samsung.android.galaxy"
-				},
-				{
-					"Televisa IZZI",
-					"telecom.televisa.com.izzi"
-				},
-				{
-					"Google IMS",
-					"com.google.android.ims"
-				},
-				{
-					"iContact Contacts Handler",
-					"com.contacts.icontact.contactshandler"
-				},
-				{
-					"Samsung Health Service",
-					"com.samsung.android.service.health"
-				},
-				{
-					"ITQR Goodman",
-					"com.ithahaqr.itqrgoodman.qrwov"
-				},
-				{
-					"WIMM MX ATT",
-					"mx.wimmx.att"
-				},
-				{
-					"PlayMusic AudioPlayer",
-					"musicplayer.playmusic.audioplayer"
-				},
-				{
-					"iHappyDate",
-					"com.ihappydate"
-				},
-				{
-					"Panda Likerro",
-					"com.panda.likerro"
-				},
-				{
-					"Ball Sort Puzzle",
-					"ball.sort.puzzle.color.sorting.bubble.games"
+					"YouTube Music",
+					"com.google.android.apps.youtube.music"
 				}
 			};
 		}
 
-		// Token: 0x060000B8 RID: 184 RVA: 0x0000B17C File Offset: 0x0000937C
+		// Token: 0x0600009F RID: 159 RVA: 0x0000A2F4 File Offset: 0x000084F4
 		private void btnCleanVirusOffline_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -7347,7 +5764,6 @@ namespace Tstool
 				this.SetAllButtonsEnabled(false, null);
 				this.btnCancelarProceso.Enabled = true;
 				this.VerificarEntornoSeguro();
-				this.ListView1.Visible = false;
 				this.txtOutput.Clear();
 				this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
 				{
@@ -7370,16 +5786,7 @@ namespace Tstool
 						{
 							selectedDevice = this.cmbDevicesAdb.SelectedItem.ToString();
 						}));
-						this.txtOutput.Clear();
-						this.txtOutput.AppendText("Operation : Clean Virus" + Environment.NewLine);
-						this.txtOutput.AppendText("Remove Method : Adb offline bd1" + Environment.NewLine + Environment.NewLine);
-						this.LeerInformacionAdbPorMarca(selectedDevice);
-						this.txtOutput.AppendText(Environment.NewLine);
-						this.LimpiarGoogleServices(selectedDevice);
-						this.EliminarVirusDetectados("Eliminación de posibles virus", selectedDevice);
-						this.GuardarLog(selectedDevice, "Clean Virus", this.txtOutput);
-						string text = this.txtOutput.Text;
-						this.GuardarLogEnFirebase(text);
+						this.EliminarVirusDetectados("Eliminación de virus", selectedDevice);
 					}
 					catch (Exception ex)
 					{
@@ -7388,18 +5795,18 @@ namespace Tstool
 					finally
 					{
 						this.processRunning = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 						this.btnCancelarProceso.Enabled = false;
 					}
 					this.UpdateProgressBar();
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				});
 			}
 		}
 
-		// Token: 0x060000B9 RID: 185 RVA: 0x0000B210 File Offset: 0x00009410
+		// Token: 0x060000A0 RID: 160 RVA: 0x0000A37C File Offset: 0x0000857C
 		public void EliminarVirusDetectados(string nombreProceso, string selectedDevice)
 		{
 			try
@@ -7442,11 +5849,11 @@ namespace Tstool
 						List<string>.Enumerator enumerator2;
 						((IDisposable)enumerator2).Dispose();
 					}
-					this.txtOutput.AppendText("✅ Process : Clean Virus Adb offline bd1 - completado." + Environment.NewLine);
+					this.txtOutput.AppendText("✅ Limpieza finalizada." + Environment.NewLine);
 				}
 				else
 				{
-					this.txtOutput.AppendText("✅ Process : Clean Virus Adb offline bd1 - completado. No se encontraron apps en bdv1 para eliminar." + Environment.NewLine);
+					this.txtOutput.AppendText("✅ No se encontraron apps del diccionario para eliminar." + Environment.NewLine);
 				}
 			}
 			catch (Exception ex)
@@ -7455,106 +5862,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000BA RID: 186 RVA: 0x0000B3F8 File Offset: 0x000095F8
-		public void LimpiarGoogleServices(string selectedDevice)
-		{
-			try
-			{
-				Dictionary<string, string> dictionary = this.ObtenerDiccionarioGoogleServices();
-				List<string> list = new List<string>();
-				this.txtOutput.AppendText(Environment.NewLine + "\ud83e\uddfc Iniciando limpieza de Google Services..." + Environment.NewLine);
-				try
-				{
-					foreach (KeyValuePair<string, string> keyValuePair in dictionary)
-					{
-						string key = keyValuePair.Key;
-						string value = keyValuePair.Value;
-						string text = this.ExecuteAdbCommand(string.Format("shell pm clear --user 0 {0}", value), selectedDevice);
-						list.Add(string.Format("\ud83d\udd04 Limpieza: {0} → {1}", key, text.Trim()));
-					}
-				}
-				finally
-				{
-					Dictionary<string, string>.Enumerator enumerator;
-					((IDisposable)enumerator).Dispose();
-				}
-				try
-				{
-					foreach (string str in list)
-					{
-						this.txtOutput.AppendText(str + Environment.NewLine);
-					}
-				}
-				finally
-				{
-					List<string>.Enumerator enumerator2;
-					((IDisposable)enumerator2).Dispose();
-				}
-				this.txtOutput.AppendText("✅ Limpieza de Google Services finalizada." + Environment.NewLine);
-			}
-			catch (Exception ex)
-			{
-				MessageBox.Show("Error al limpiar bloatware: " + ex.Message);
-			}
-		}
-
-		// Token: 0x060000BB RID: 187 RVA: 0x0000B584 File Offset: 0x00009784
-		private Dictionary<string, string> ObtenerDiccionarioGoogleServices()
-		{
-			return new Dictionary<string, string>
-			{
-				{
-					"Play Store",
-					"com.android.vending"
-				},
-				{
-					"Chrome",
-					"com.android.chrome"
-				},
-				{
-					"Android WebView",
-					"com.google.android.webview"
-				},
-				{
-					"Google Play Services",
-					"com.google.android.gms"
-				},
-				{
-					"Google AR Core",
-					"com.google.ar.core"
-				},
-				{
-					"Google Feedback",
-					"com.google.android.feedback"
-				},
-				{
-					"Google Partner Setup",
-					"com.google.android.partnersetup"
-				},
-				{
-					"GMS Location History",
-					"com.google.android.gms.location.history"
-				},
-				{
-					"Google SafetyCore",
-					"com.google.android.safetycore"
-				},
-				{
-					"Google Wellbeing",
-					"com.google.android.apps.wellbeing"
-				},
-				{
-					"Google Assistant",
-					"com.google.android.apps.googleassistant"
-				},
-				{
-					"Samsung OMC Agent",
-					"com.samsung.android.app.omcagent"
-				}
-			};
-		}
-
-		// Token: 0x060000BC RID: 188 RVA: 0x0000B668 File Offset: 0x00009868
+		// Token: 0x060000A1 RID: 161 RVA: 0x0000A564 File Offset: 0x00008764
 		public void EliminarAppsUsuarioConFiltro(string nombreProceso, string selectedDevice)
 		{
 			try
@@ -7640,7 +5948,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000BD RID: 189 RVA: 0x0000B960 File Offset: 0x00009B60
+		// Token: 0x060000A2 RID: 162 RVA: 0x0000A85C File Offset: 0x00008A5C
 		private void btnConsultarVirusOnlineSolo_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -7653,10 +5961,10 @@ namespace Tstool
 					bool flag = devices.Count == 0 || this.cmbDevicesAdb.Invoke(new VB$AnonymousDelegate_1<object>(() => this.cmbDevicesAdb.SelectedItem)) == null;
 					if (flag)
 					{
-						this.Invoke((Form1._Closure$__.$I150-2 == null) ? (Form1._Closure$__.$I150-2 = delegate()
+						this.Invoke((Form1._Closure$__.$I139-2 == null) ? (Form1._Closure$__.$I139-2 = delegate()
 						{
 							MessageBox.Show("Conecta un dispositivo.");
-						}) : Form1._Closure$__.$I150-2);
+						}) : Form1._Closure$__.$I139-2);
 						return;
 					}
 					string selectedDevice = "";
@@ -7679,7 +5987,7 @@ namespace Tstool
 			});
 		}
 
-		// Token: 0x060000BE RID: 190 RVA: 0x0000B984 File Offset: 0x00009B84
+		// Token: 0x060000A3 RID: 163 RVA: 0x0000A880 File Offset: 0x00008A80
 		public async Task ConsultarVirusOnlineSinEliminar(string selectedDevice, string apiKey)
 		{
 			string rutaLogs = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs");
@@ -7788,7 +6096,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000BF RID: 191 RVA: 0x0000B9D8 File Offset: 0x00009BD8
+		// Token: 0x060000A4 RID: 164 RVA: 0x0000A8D4 File Offset: 0x00008AD4
 		public async Task<bool> ConsultarVirusTotal(string packageName, string apiKey)
 		{
 			try
@@ -7905,7 +6213,7 @@ namespace Tstool
 			return false;
 		}
 
-		// Token: 0x060000C0 RID: 192 RVA: 0x0000BA2A File Offset: 0x00009C2A
+		// Token: 0x060000A5 RID: 165 RVA: 0x0000A926 File Offset: 0x00008B26
 		private void btnConsultarYEliminarVirusOnline_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -7918,10 +6226,10 @@ namespace Tstool
 					bool flag = devices.Count == 0 || this.cmbDevicesAdb.Invoke(new VB$AnonymousDelegate_1<object>(() => this.cmbDevicesAdb.SelectedItem)) == null;
 					if (flag)
 					{
-						this.Invoke((Form1._Closure$__.$I153-2 == null) ? (Form1._Closure$__.$I153-2 = delegate()
+						this.Invoke((Form1._Closure$__.$I142-2 == null) ? (Form1._Closure$__.$I142-2 = delegate()
 						{
 							MessageBox.Show("Conecta un dispositivo.");
-						}) : Form1._Closure$__.$I153-2);
+						}) : Form1._Closure$__.$I142-2);
 						return;
 					}
 					string selectedDevice = "";
@@ -7944,7 +6252,7 @@ namespace Tstool
 			});
 		}
 
-		// Token: 0x060000C1 RID: 193 RVA: 0x0000BA50 File Offset: 0x00009C50
+		// Token: 0x060000A6 RID: 166 RVA: 0x0000A94C File Offset: 0x00008B4C
 		public async Task ConsultarYEliminarVirusOnline(string selectedDevice, string apiKey)
 		{
 			string rutaLogs = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs");
@@ -8064,7 +6372,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000C2 RID: 194 RVA: 0x0000BAA4 File Offset: 0x00009CA4
+		// Token: 0x060000A7 RID: 167 RVA: 0x0000A9A0 File Offset: 0x00008BA0
 		private void AppendColoredText(RichTextBox rtb, string text, Color color)
 		{
 			rtb.Invoke(new VB$AnonymousDelegate_0(delegate()
@@ -8076,7 +6384,7 @@ namespace Tstool
 			}));
 		}
 
-		// Token: 0x060000C3 RID: 195 RVA: 0x0000BAE8 File Offset: 0x00009CE8
+		// Token: 0x060000A8 RID: 168 RVA: 0x0000A9E4 File Offset: 0x00008BE4
 		public async Task<Form1.VirusAnalysisResult> ConsultarVirusTotalDetalles(string packageName, string apiKey)
 		{
 			Form1.VirusAnalysisResult result = new Form1.VirusAnalysisResult();
@@ -8190,7 +6498,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x060000C4 RID: 196 RVA: 0x0000BB3C File Offset: 0x00009D3C
+		// Token: 0x060000A9 RID: 169 RVA: 0x0000AA38 File Offset: 0x00008C38
 		public async Task<Form1.VirusAnalysisResult> ConsultarVirusTotalDetallesSHA256(string sha256, string apiKey)
 		{
 			Form1.VirusAnalysisResult result = new Form1.VirusAnalysisResult
@@ -8274,7 +6582,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x060000C5 RID: 197 RVA: 0x0000BB8E File Offset: 0x00009D8E
+		// Token: 0x060000AA RID: 170 RVA: 0x0000AA8A File Offset: 0x00008C8A
 		private void btnConsultarKoodousPorHash_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -8287,10 +6595,10 @@ namespace Tstool
 					bool flag = devices.Count == 0 || this.cmbDevicesAdb.Invoke(new VB$AnonymousDelegate_1<object>(() => this.cmbDevicesAdb.SelectedItem)) == null;
 					if (flag)
 					{
-						this.Invoke((Form1._Closure$__.$I159-2 == null) ? (Form1._Closure$__.$I159-2 = delegate()
+						this.Invoke((Form1._Closure$__.$I148-2 == null) ? (Form1._Closure$__.$I148-2 = delegate()
 						{
 							MessageBox.Show("Conecta un dispositivo.");
-						}) : Form1._Closure$__.$I159-2);
+						}) : Form1._Closure$__.$I148-2);
 						return;
 					}
 					string selectedDevice = "";
@@ -8313,7 +6621,7 @@ namespace Tstool
 			});
 		}
 
-		// Token: 0x060000C6 RID: 198 RVA: 0x0000BBB4 File Offset: 0x00009DB4
+		// Token: 0x060000AB RID: 171 RVA: 0x0000AAB0 File Offset: 0x00008CB0
 		public async Task VerificarKoodousPorHash(string selectedDevice, string apiKey)
 		{
 			string rutaLogs = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs");
@@ -8374,7 +6682,7 @@ namespace Tstool
 			File.AppendAllText(rutaArchivo, "✅ Fin del escaneo Koodous por hash." + Environment.NewLine);
 		}
 
-		// Token: 0x060000C7 RID: 199 RVA: 0x0000BC08 File Offset: 0x00009E08
+		// Token: 0x060000AC RID: 172 RVA: 0x0000AB04 File Offset: 0x00008D04
 		public async Task<bool> ConsultarKoodousPorHash(string sha256, string apiKey)
 		{
 			try
@@ -8398,7 +6706,7 @@ namespace Tstool
 			return false;
 		}
 
-		// Token: 0x060000C8 RID: 200 RVA: 0x0000BC5C File Offset: 0x00009E5C
+		// Token: 0x060000AD RID: 173 RVA: 0x0000AB58 File Offset: 0x00008D58
 		public string ObtenerRutaApk(string packageName, string selectedDevice)
 		{
 			string text = this.ExecuteAdbCommandTest(string.Format("-s {0} shell pm path {1}", selectedDevice, packageName));
@@ -8415,14 +6723,14 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x060000C9 RID: 201 RVA: 0x0000BCB0 File Offset: 0x00009EB0
+		// Token: 0x060000AE RID: 174 RVA: 0x0000ABAC File Offset: 0x00008DAC
 		public bool DescargarApk(string apkPath, string localPath, string selectedDevice)
 		{
 			string text = this.ExecuteAdbCommandTest(string.Format("-s {0} pull \"{1}\" \"{2}\"", selectedDevice, apkPath, localPath));
 			return text.ToLower().Contains("pulled") | text.ToLower().Contains("1 file pulled");
 		}
 
-		// Token: 0x060000CA RID: 202 RVA: 0x0000BCF8 File Offset: 0x00009EF8
+		// Token: 0x060000AF RID: 175 RVA: 0x0000ABF4 File Offset: 0x00008DF4
 		public string CalcularSHA256(string rutaArchivo)
 		{
 			string result;
@@ -8437,7 +6745,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x060000CB RID: 203 RVA: 0x0000BD70 File Offset: 0x00009F70
+		// Token: 0x060000B0 RID: 176 RVA: 0x0000AC6C File Offset: 0x00008E6C
 		public string ExecuteAdbCommandTest(string command)
 		{
 			string result;
@@ -8465,7 +6773,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x060000CC RID: 204 RVA: 0x0000BE44 File Offset: 0x0000A044
+		// Token: 0x060000B1 RID: 177 RVA: 0x0000AD40 File Offset: 0x00008F40
 		public async Task<bool> ConsultarKaspersky(string hashSha256, string apiKey)
 		{
 			try
@@ -8536,7 +6844,7 @@ namespace Tstool
 			return false;
 		}
 
-		// Token: 0x060000CD RID: 205 RVA: 0x0000BE98 File Offset: 0x0000A098
+		// Token: 0x060000B2 RID: 178 RVA: 0x0000AD94 File Offset: 0x00008F94
 		public async Task RevisarConKaspersky(string selectedDevice, string apiKey)
 		{
 			string resultado = this.ExecuteAdbCommand("shell pm list packages -f", selectedDevice);
@@ -8585,7 +6893,7 @@ namespace Tstool
 			this.txtOutput.AppendText(Environment.NewLine + "✅ Escaneo con Kaspersky finalizado." + Environment.NewLine);
 		}
 
-		// Token: 0x060000CE RID: 206 RVA: 0x0000BEEA File Offset: 0x0000A0EA
+		// Token: 0x060000B3 RID: 179 RVA: 0x0000ADE6 File Offset: 0x00008FE6
 		private void btnRevisarKaspersky_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -8598,10 +6906,10 @@ namespace Tstool
 					bool flag = devices.Count == 0 || this.cmbDevicesAdb.Invoke(new VB$AnonymousDelegate_1<object>(() => this.cmbDevicesAdb.SelectedItem)) == null;
 					if (flag)
 					{
-						this.Invoke((Form1._Closure$__.$I168-2 == null) ? (Form1._Closure$__.$I168-2 = delegate()
+						this.Invoke((Form1._Closure$__.$I157-2 == null) ? (Form1._Closure$__.$I157-2 = delegate()
 						{
 							MessageBox.Show("Conecta un dispositivo.");
-						}) : Form1._Closure$__.$I168-2);
+						}) : Form1._Closure$__.$I157-2);
 						return;
 					}
 					string selectedDevice = "";
@@ -8624,7 +6932,7 @@ namespace Tstool
 			});
 		}
 
-		// Token: 0x060000CF RID: 207 RVA: 0x0000BF10 File Offset: 0x0000A110
+		// Token: 0x060000B4 RID: 180 RVA: 0x0000AE0C File Offset: 0x0000900C
 		public void MostrarSoloBloqueosDispositivo(string nombreProceso, string selectedDevice)
 		{
 			Dictionary<string, string> dictionary = this.ObtenerDiccionarioBloqueos();
@@ -8649,7 +6957,7 @@ namespace Tstool
 			this.txtOutput.AppendText("✅ Consulta completada." + Environment.NewLine);
 		}
 
-		// Token: 0x060000D0 RID: 208 RVA: 0x0000BFF0 File Offset: 0x0000A1F0
+		// Token: 0x060000B5 RID: 181 RVA: 0x0000AEEC File Offset: 0x000090EC
 		private void OutputDataReceivedHandler(object sender, DataReceivedEventArgs e)
 		{
 			bool flag = !string.IsNullOrEmpty(e.Data);
@@ -8662,7 +6970,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000D1 RID: 209 RVA: 0x0000C044 File Offset: 0x0000A244
+		// Token: 0x060000B6 RID: 182 RVA: 0x0000AF40 File Offset: 0x00009140
 		private void btnBuscarYEditar_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -8697,11 +7005,11 @@ namespace Tstool
 				this.UpdateProgressBar();
 				this.processRunning = false;
 				this.btnCancelarProceso.Enabled = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 			}
 		}
 
-		// Token: 0x060000D2 RID: 210 RVA: 0x0000C118 File Offset: 0x0000A318
+		// Token: 0x060000B7 RID: 183 RVA: 0x0000B018 File Offset: 0x00009218
 		private void BuscarYEditarOffset(string filePath)
 		{
 			checked
@@ -8977,23 +7285,22 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000D3 RID: 211 RVA: 0x0000C670 File Offset: 0x0000A870
+		// Token: 0x060000B8 RID: 184 RVA: 0x0000B570 File Offset: 0x00009770
 		private void BtnPatchFileHonor_Click(object sender, EventArgs e)
 		{
 			OpenFileDialog openFileDialog = new OpenFileDialog
 			{
-				Filter = "Archivos OEMINFO|oeminfo.bin;oeminfo.img;oeminfo",
-				Title = "Selecciona el archivo OEMINFO"
+				Filter = "Archivo OEMINFO (oeminfo.bin)|oeminfo.bin",
+				Title = "Selecciona el archivo oeminfo.bin"
 			};
 			bool flag = openFileDialog.ShowDialog() == DialogResult.OK;
 			if (flag)
 			{
 				string fileName = openFileDialog.FileName;
-				string left = Path.GetFileNameWithoutExtension(fileName).ToLower();
-				bool flag2 = Operators.CompareString(left, "oeminfo", false) != 0;
+				bool flag2 = Operators.CompareString(Path.GetFileName(fileName).ToLower(), "oeminfo.bin", false) != 0;
 				if (flag2)
 				{
-					MessageBox.Show("Debes seleccionar un archivo llamado 'oeminfo', con o sin extensión (.bin o .img).", "Archivo incorrecto", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+					MessageBox.Show("Debes seleccionar un archivo llamado 'oeminfo.bin'.", "Archivo incorrecto", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
 				}
 				else
 				{
@@ -9002,7 +7309,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000D4 RID: 212 RVA: 0x0000C6F4 File Offset: 0x0000A8F4
+		// Token: 0x060000B9 RID: 185 RVA: 0x0000B5F0 File Offset: 0x000097F0
 		private bool ReemplazarDefPorUsaSeguro(string filePath)
 		{
 			checked
@@ -9042,7 +7349,7 @@ namespace Tstool
 						if (flag3)
 						{
 							text = Encoding.ASCII.GetString(array, num2, 16);
-							text = new string(text.TakeWhile((Form1._Closure$__.$I175-0 == null) ? (Form1._Closure$__.$I175-0 = ((char c) => char.IsLetterOrDigit(c) || c == '-')) : Form1._Closure$__.$I175-0).ToArray<char>());
+							text = new string(text.TakeWhile((Form1._Closure$__.$I164-0 == null) ? (Form1._Closure$__.$I164-0 = ((char c) => char.IsLetterOrDigit(c) || c == '-')) : Form1._Closure$__.$I164-0).ToArray<char>());
 							bool flag4 = string.IsNullOrWhiteSpace(text);
 							if (flag4)
 							{
@@ -9120,7 +7427,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000D5 RID: 213 RVA: 0x0000CA40 File Offset: 0x0000AC40
+		// Token: 0x060000BA RID: 186 RVA: 0x0000B93C File Offset: 0x00009B3C
 		private void CargarPuertosSamsung()
 		{
 			this.cmbPuertos.Items.Clear();
@@ -9157,7 +7464,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000D6 RID: 214 RVA: 0x0000CB20 File Offset: 0x0000AD20
+		// Token: 0x060000BB RID: 187 RVA: 0x0000BA1C File Offset: 0x00009C1C
 		private void EjecutarExploitKnoxGuard()
 		{
 			this.txtOutput.AppendText("\ud83d\ude80 Iniciando exploit para KnoxGuard..." + Environment.NewLine);
@@ -9219,13 +7526,13 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000D7 RID: 215 RVA: 0x0000CD3C File Offset: 0x0000AF3C
+		// Token: 0x060000BC RID: 188 RVA: 0x0000BC38 File Offset: 0x00009E38
 		private void btnExploitKG_Click(object sender, EventArgs e)
 		{
 			this.EjecutarExploitKnoxGuard();
 		}
 
-		// Token: 0x060000D8 RID: 216 RVA: 0x0000CD48 File Offset: 0x0000AF48
+		// Token: 0x060000BD RID: 189 RVA: 0x0000BC44 File Offset: 0x00009E44
 		private void DesactivarKnoxGuardPorAppOps(string selectedDevice)
 		{
 			checked
@@ -9310,7 +7617,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000D9 RID: 217 RVA: 0x0000D0D4 File Offset: 0x0000B2D4
+		// Token: 0x060000BE RID: 190 RVA: 0x0000BFD0 File Offset: 0x0000A1D0
 		private async void btnDesactivarKG_Click(object sender, EventArgs e)
 		{
 			this.InitializeProgressBar(4);
@@ -9408,7 +7715,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000DA RID: 218 RVA: 0x0000D11C File Offset: 0x0000B31C
+		// Token: 0x060000BF RID: 191 RVA: 0x0000C018 File Offset: 0x0000A218
 		private void CompararYExportarBloquesAvanzado(string rutaArchivoLock, string rutaArchivoUnlock, string rutaCSVSalida)
 		{
 			checked
@@ -9463,13 +7770,13 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000DB RID: 219 RVA: 0x0000D284 File Offset: 0x0000B484
+		// Token: 0x060000C0 RID: 192 RVA: 0x0000C180 File Offset: 0x0000A380
 		private void AgregarBloqueCSVConSugerencia(StringBuilder sb, List<Tuple<int, byte, byte>> bloque)
 		{
 			int item = bloque[0].Item1;
 			int count = bloque.Count;
-			string text = string.Join(" ", bloque.Select((Form1._Closure$__.$I182-0 == null) ? (Form1._Closure$__.$I182-0 = ((Tuple<int, byte, byte> x) => x.Item2.ToString("X2"))) : Form1._Closure$__.$I182-0));
-			string text2 = string.Join(" ", bloque.Select((Form1._Closure$__.$I182-1 == null) ? (Form1._Closure$__.$I182-1 = ((Tuple<int, byte, byte> x) => x.Item3.ToString("X2"))) : Form1._Closure$__.$I182-1));
+			string text = string.Join(" ", bloque.Select((Form1._Closure$__.$I171-0 == null) ? (Form1._Closure$__.$I171-0 = ((Tuple<int, byte, byte> x) => x.Item2.ToString("X2"))) : Form1._Closure$__.$I171-0));
+			string text2 = string.Join(" ", bloque.Select((Form1._Closure$__.$I171-1 == null) ? (Form1._Closure$__.$I171-1 = ((Tuple<int, byte, byte> x) => x.Item3.ToString("X2"))) : Form1._Closure$__.$I171-1));
 			bool flag = count == 1 && bloque[0].Item2 == 1 && bloque[0].Item3 == 58;
 			string text3;
 			if (flag)
@@ -9478,7 +7785,7 @@ namespace Tstool
 			}
 			else
 			{
-				bool flag2 = bloque.All((Form1._Closure$__.$I182-2 == null) ? (Form1._Closure$__.$I182-2 = ((Tuple<int, byte, byte> x) => x.Item3 == 0)) : Form1._Closure$__.$I182-2);
+				bool flag2 = bloque.All((Form1._Closure$__.$I171-2 == null) ? (Form1._Closure$__.$I171-2 = ((Tuple<int, byte, byte> x) => x.Item3 == 0)) : Form1._Closure$__.$I171-2);
 				if (flag2)
 				{
 					text3 = "Borrado de estructura o checksum";
@@ -9514,7 +7821,7 @@ namespace Tstool
 			}));
 		}
 
-		// Token: 0x060000DC RID: 220 RVA: 0x0000D3F4 File Offset: 0x0000B5F4
+		// Token: 0x060000C1 RID: 193 RVA: 0x0000C2F0 File Offset: 0x0000A4F0
 		private void btnComparar_Click(object sender, EventArgs e)
 		{
 			string rutaArchivoLock = "C:\\Tstool\\Lock.bin";
@@ -9523,7 +7830,7 @@ namespace Tstool
 			this.CompararYExportarBloquesAvanzado(rutaArchivoLock, rutaArchivoUnlock, rutaCSVSalida);
 		}
 
-		// Token: 0x060000DD RID: 221 RVA: 0x0000D420 File Offset: 0x0000B620
+		// Token: 0x060000C2 RID: 194 RVA: 0x0000C31C File Offset: 0x0000A51C
 		private void btnPatchFileOppo_Click(object sender, EventArgs e)
 		{
 			OpenFileDialog openFileDialog = new OpenFileDialog
@@ -9539,7 +7846,79 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000DE RID: 222 RVA: 0x0000D46C File Offset: 0x0000B66C
+		// Token: 0x060000C3 RID: 195 RVA: 0x0000C368 File Offset: 0x0000A568
+		private void CargarFirmwaresCompatibles()
+		{
+			this.ConfigurarListView();
+			string texto = this.LimpiarTexto(this.txtOutput.Text);
+			string text = this.ExtraerValorDesdeTexto(texto, "Code name:");
+			string text2 = this.ExtraerValorDesdeTexto(texto, "Carrier ID:");
+			bool flag = string.IsNullOrEmpty(text) || string.IsNullOrEmpty(text2);
+			if (flag)
+			{
+				MessageBox.Show("No se encontró el Codename o Carrier ID en el log.");
+			}
+			else
+			{
+				string text3 = "https://mirrors.lolinet.com/firmware/lenomola/";
+				string[] array = new string[]
+				{
+					"2025",
+					"2024",
+					"2023",
+					"2022",
+					"2021"
+				};
+				foreach (string text4 in array)
+				{
+					string text5 = string.Format("{0}{1}/{2}/official/{3}/", new object[]
+					{
+						text3,
+						text4,
+						text,
+						text2.ToUpper()
+					});
+					bool flag2 = this.UrlExiste(text5);
+					if (flag2)
+					{
+						string html = this.DescargarHtml(text5);
+						List<string> list = this.ObtenerListaDeZips(html);
+						try
+						{
+							foreach (string text6 in list)
+							{
+								bool flag3 = text6.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0 && text6.IndexOf(text2, StringComparison.OrdinalIgnoreCase) >= 0;
+								if (flag3)
+								{
+									string fileName = Path.GetFileName(text6);
+									string text7 = text5 + fileName;
+									ListViewItem listViewItem = new ListViewItem(fileName);
+									listViewItem.SubItems.Add(text4);
+									listViewItem.SubItems.Add(text7);
+									this.ListView1.Items.Add(listViewItem);
+								}
+							}
+						}
+						finally
+						{
+							List<string>.Enumerator enumerator;
+							((IDisposable)enumerator).Dispose();
+						}
+					}
+				}
+				bool flag4 = this.ListView1.Items.Count == 0;
+				if (flag4)
+				{
+					this.txtOutput.AppendText("❌ No se encontraron firmwares compatibles." + Environment.NewLine);
+				}
+				else
+				{
+					this.txtOutput.AppendText("✅ Firmwares compatibles agregados al listado." + Environment.NewLine);
+				}
+			}
+		}
+
+		// Token: 0x060000C4 RID: 196 RVA: 0x0000C590 File Offset: 0x0000A790
 		private void ListView1_DoubleClick(object sender, EventArgs e)
 		{
 			bool flag = this.ListView1.SelectedItems.Count > 0;
@@ -9561,7 +7940,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000DF RID: 223 RVA: 0x0000D514 File Offset: 0x0000B714
+		// Token: 0x060000C5 RID: 197 RVA: 0x0000C638 File Offset: 0x0000A838
 		private async Task EjecutarComandosFastboot(List<string> comandos)
 		{
 			try
@@ -9569,10 +7948,10 @@ namespace Tstool
 				List<string>.Enumerator enumerator = comandos.GetEnumerator();
 				while (enumerator.MoveNext())
 				{
-					Form1._Closure$__186-0 CS$<>8__locals1 = new Form1._Closure$__186-0(CS$<>8__locals1);
+					Form1._Closure$__176-0 CS$<>8__locals1 = new Form1._Closure$__176-0(CS$<>8__locals1);
 					CS$<>8__locals1.$VB$Me = this;
 					CS$<>8__locals1.$VB$Local_comando = enumerator.Current;
-					Form1._Closure$__186-1 CS$<>8__locals2 = new Form1._Closure$__186-1(CS$<>8__locals2);
+					Form1._Closure$__176-1 CS$<>8__locals2 = new Form1._Closure$__176-1(CS$<>8__locals2);
 					CS$<>8__locals2.$VB$NonLocal_$VB$Closure_2 = CS$<>8__locals1;
 					string resultadoBruto = await Task.Run<string>(() => CS$<>8__locals2.$VB$NonLocal_$VB$Closure_2.$VB$Me.EjecutarFastboot(CS$<>8__locals2.$VB$NonLocal_$VB$Closure_2.$VB$Local_comando));
 					CS$<>8__locals2.$VB$Local_estado = this.AnalizarResultadoFastboot(resultadoBruto);
@@ -9589,14 +7968,8 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000E0 RID: 224 RVA: 0x0000D560 File Offset: 0x0000B760
+		// Token: 0x060000C6 RID: 198 RVA: 0x0000C684 File Offset: 0x0000A884
 		private async void btnwipefastbootmt_Click(object sender, EventArgs e)
-		{
-			this.wipefastbootmt_Click(RuntimeHelpers.GetObjectValue(sender), e);
-		}
-
-		// Token: 0x060000E1 RID: 225 RVA: 0x0000D5A8 File Offset: 0x0000B7A8
-		private async void wipefastbootmt_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
 			if (flag)
@@ -9609,6 +7982,7 @@ namespace Tstool
 				this.SetAllButtonsEnabled(false, null);
 				this.btnCancelarProceso.Enabled = true;
 				this.VerificarEntornoSeguro();
+				this.txtOutput.Clear();
 				this.cmbDevices.Items.Clear();
 				List<string> devices = await Task.Run<List<string>>(() => this.GetFastbootDevices());
 				if (devices.Count > 0)
@@ -9627,10 +8001,6 @@ namespace Tstool
 					}
 					this.cmbDevices.SelectedIndex = 0;
 					this.fastbootTimer.Enabled = false;
-					string selectedDevice = this.cmbDevices.SelectedItem.ToString();
-					this.ReadFastbootDeviceInfo(selectedDevice);
-					this.txtOutput.AppendText("Operation : MDM Fastboot Motorola" + Environment.NewLine);
-					this.txtOutput.AppendText("Remove Method : Generic All devices" + Environment.NewLine);
 					List<string> comandos = new List<string>
 					{
 						"-w",
@@ -9645,22 +8015,23 @@ namespace Tstool
 						"reboot"
 					};
 					await this.EjecutarComandosFastboot(comandos);
-					this.txtOutput.AppendText("Process: MDM Fastboot Motorola Generic All devices" + Environment.NewLine + Environment.NewLine);
+					this.txtOutput.AppendText("Proceso de borrado completado." + Environment.NewLine);
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				}
 				else
 				{
 					this.cmbDevices.Items.Add("Waiting for devices...");
 					this.cmbDevices.SelectedIndex = 0;
 					this.txtOutput.AppendText("No Fastboot devices found." + Environment.NewLine);
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.btnwipefastbootmt.Enabled = true;
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				}
 			}
 		}
 
-		// Token: 0x060000E2 RID: 226 RVA: 0x0000D5F0 File Offset: 0x0000B7F0
+		// Token: 0x060000C7 RID: 199 RVA: 0x0000C6CC File Offset: 0x0000A8CC
 		private string AnalizarResultadoFastboot(string salida)
 		{
 			bool flag = salida.ToLower().Contains("okay") || salida.ToLower().Contains("finished.");
@@ -9684,7 +8055,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x060000E3 RID: 227 RVA: 0x0000D678 File Offset: 0x0000B878
+		// Token: 0x060000C8 RID: 200 RVA: 0x0000C754 File Offset: 0x0000A954
 		private void btnfu_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -9720,13 +8091,13 @@ namespace Tstool
 				finally
 				{
 					this.processRunning = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 					this.btnCancelarProceso.Enabled = false;
 				}
 			}
 		}
 
-		// Token: 0x060000E4 RID: 228 RVA: 0x0000D790 File Offset: 0x0000B990
+		// Token: 0x060000C9 RID: 201 RVA: 0x0000C874 File Offset: 0x0000AA74
 		private string EnviarComandoAT(string comando)
 		{
 			string result;
@@ -9773,7 +8144,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x060000E5 RID: 229 RVA: 0x0000D8EC File Offset: 0x0000BAEC
+		// Token: 0x060000CA RID: 202 RVA: 0x0000C9D0 File Offset: 0x0000ABD0
 		private void btnfacto_Click(object sender, EventArgs e)
 		{
 			this.UpdateComPortList();
@@ -9828,21 +8199,21 @@ namespace Tstool
 						finally
 						{
 							this.processRunning = false;
-							this.AplicarPermisosDesdeFirebasePorPlan();
+							this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 							this.btnCancelarProceso.Enabled = false;
 						}
 						this.processRunning = false;
 						this.btnCancelarProceso.Enabled = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 					});
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				}
 			}
 		}
 
-		// Token: 0x060000E6 RID: 230 RVA: 0x0000D9D8 File Offset: 0x0000BBD8
+		// Token: 0x060000CB RID: 203 RVA: 0x0000CAC4 File Offset: 0x0000ACC4
 		private async void btnKgNew_Click(object sender, EventArgs e)
 		{
 			this.txtOutput.Clear();
@@ -9947,16 +8318,16 @@ namespace Tstool
 				finally
 				{
 					this.processRunning = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 					this.btnCancelarProceso.Enabled = false;
 				}
 				this.processRunning = false;
 				this.btnCancelarProceso.Enabled = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 			}
 		}
 
-		// Token: 0x060000E7 RID: 231 RVA: 0x0000DA20 File Offset: 0x0000BC20
+		// Token: 0x060000CC RID: 204 RVA: 0x0000CB0C File Offset: 0x0000AD0C
 		private async Task EjecutarPayloadKnoxGuard(string selectedDevice)
 		{
 			string rutaLocal = "C:\\Tstool\\bin\\fgm.bin";
@@ -10015,7 +8386,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000E8 RID: 232 RVA: 0x0000DA6C File Offset: 0x0000BC6C
+		// Token: 0x060000CD RID: 205 RVA: 0x0000CB58 File Offset: 0x0000AD58
 		private void EjecutarAdb(string comando, string dispositivo)
 		{
 			Process process = new Process();
@@ -10028,7 +8399,7 @@ namespace Tstool
 			process.WaitForExit();
 		}
 
-		// Token: 0x060000E9 RID: 233 RVA: 0x0000DAE0 File Offset: 0x0000BCE0
+		// Token: 0x060000CE RID: 206 RVA: 0x0000CBCC File Offset: 0x0000ADCC
 		private string EjecutarAdbConResultado(string comando, string dispositivo)
 		{
 			Process process = new Process();
@@ -10043,7 +8414,7 @@ namespace Tstool
 			return text.Trim();
 		}
 
-		// Token: 0x060000EA RID: 234 RVA: 0x0000DB68 File Offset: 0x0000BD68
+		// Token: 0x060000CF RID: 207 RVA: 0x0000CC54 File Offset: 0x0000AE54
 		private async void btnkglocktoactive_Click(object sender, EventArgs e)
 		{
 			this.txtOutput.Clear();
@@ -10094,7 +8465,7 @@ namespace Tstool
 						finally
 						{
 							this.processRunning = false;
-							this.AplicarPermisosDesdeFirebasePorPlan();
+							this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 							this.btnCancelarProceso.Enabled = false;
 						}
 					}
@@ -10108,7 +8479,7 @@ namespace Tstool
 						finally
 						{
 							this.processRunning = false;
-							this.AplicarPermisosDesdeFirebasePorPlan();
+							this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 							this.btnCancelarProceso.Enabled = false;
 						}
 					}
@@ -10125,18 +8496,18 @@ namespace Tstool
 						finally
 						{
 							this.processRunning = false;
-							this.AplicarPermisosDesdeFirebasePorPlan();
+							this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 							this.btnCancelarProceso.Enabled = false;
 						}
 						this.processRunning = false;
 						this.btnCancelarProceso.Enabled = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 					}
 				}
 			}
 		}
 
-		// Token: 0x060000EB RID: 235 RVA: 0x0000DBB0 File Offset: 0x0000BDB0
+		// Token: 0x060000D0 RID: 208 RVA: 0x0000CC9C File Offset: 0x0000AE9C
 		private void btnRebootDevice_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -10190,17 +8561,17 @@ namespace Tstool
 					finally
 					{
 						this.processRunning = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 						this.btnCancelarProceso.Enabled = false;
 					}
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				});
 			}
 		}
 
-		// Token: 0x060000EC RID: 236 RVA: 0x0000DC14 File Offset: 0x0000BE14
+		// Token: 0x060000D1 RID: 209 RVA: 0x0000CD00 File Offset: 0x0000AF00
 		private void btnRebootDeviceBL_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -10254,17 +8625,17 @@ namespace Tstool
 					finally
 					{
 						this.processRunning = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 						this.btnCancelarProceso.Enabled = false;
 					}
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				});
 			}
 		}
 
-		// Token: 0x060000ED RID: 237 RVA: 0x0000DC78 File Offset: 0x0000BE78
+		// Token: 0x060000D2 RID: 210 RVA: 0x0000CD64 File Offset: 0x0000AF64
 		private void btnRebootRecovery_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -10318,17 +8689,17 @@ namespace Tstool
 					finally
 					{
 						this.processRunning = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 						this.btnCancelarProceso.Enabled = false;
 					}
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				});
 			}
 		}
 
-		// Token: 0x060000EE RID: 238 RVA: 0x0000DCDC File Offset: 0x0000BEDC
+		// Token: 0x060000D3 RID: 211 RVA: 0x0000CDC8 File Offset: 0x0000AFC8
 		private string ExtraerHexDesdeLeftover(string salida)
 		{
 			Regex regex = new Regex("Leftover Capture Data:\\s*([0-9a-fA-F]+)");
@@ -10346,7 +8717,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x060000EF RID: 239 RVA: 0x0000DD28 File Offset: 0x0000BF28
+		// Token: 0x060000D4 RID: 212 RVA: 0x0000CE14 File Offset: 0x0000B014
 		private string DecodeHexToAscii(string hex)
 		{
 			string result;
@@ -10363,7 +8734,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x060000F0 RID: 240 RVA: 0x0000DDA4 File Offset: 0x0000BFA4
+		// Token: 0x060000D5 RID: 213 RVA: 0x0000CE90 File Offset: 0x0000B090
 		private async void btnReadHuaweiInfo_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -10410,7 +8781,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000F1 RID: 241 RVA: 0x0000DDEC File Offset: 0x0000BFEC
+		// Token: 0x060000D6 RID: 214 RVA: 0x0000CED8 File Offset: 0x0000B0D8
 		private async Task<Dictionary<string, string>> LeerInfoHuaweiFastbootAsync()
 		{
 			Dictionary<string, string> info = new Dictionary<string, string>
@@ -10544,7 +8915,7 @@ namespace Tstool
 			return info;
 		}
 
-		// Token: 0x060000F2 RID: 242 RVA: 0x0000DE30 File Offset: 0x0000C030
+		// Token: 0x060000D7 RID: 215 RVA: 0x0000CF1C File Offset: 0x0000B11C
 		private string LimpiarHuaweiOutput(string output)
 		{
 			foreach (string text in output.Split(new string[]
@@ -10568,7 +8939,7 @@ namespace Tstool
 			return "No detectado";
 		}
 
-		// Token: 0x060000F3 RID: 243 RVA: 0x0000DEC8 File Offset: 0x0000C0C8
+		// Token: 0x060000D8 RID: 216 RVA: 0x0000CFB4 File Offset: 0x0000B1B4
 		private string LimpiarSerialHuawei(string output)
 		{
 			foreach (string text in output.Split(new string[]
@@ -10590,16 +8961,16 @@ namespace Tstool
 			return "No detectado";
 		}
 
-		// Token: 0x060000F4 RID: 244 RVA: 0x0000DF50 File Offset: 0x0000C150
+		// Token: 0x060000D9 RID: 217 RVA: 0x0000D03C File Offset: 0x0000B23C
 		private void RestaurarUIHuawei()
 		{
 			this.processRunning = false;
 			this.btnCancelarProceso.Enabled = false;
-			this.AplicarPermisosDesdeFirebasePorPlan();
+			this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 			this.btnReadHuaweiInfo.Enabled = true;
 		}
 
-		// Token: 0x060000F5 RID: 245 RVA: 0x0000DF7C File Offset: 0x0000C17C
+		// Token: 0x060000DA RID: 218 RVA: 0x0000D070 File Offset: 0x0000B270
 		private void btnKnoxNew_Click(object sender, EventArgs e)
 		{
 			try
@@ -10695,7 +9066,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000F6 RID: 246 RVA: 0x0000E244 File Offset: 0x0000C444
+		// Token: 0x060000DB RID: 219 RVA: 0x0000D338 File Offset: 0x0000B538
 		public void ConsultarFirmwaresSamsungDesdeOutput(RichTextBox txtOutput)
 		{
 			string text = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "HtmlAgilityPack.dll");
@@ -10718,7 +9089,7 @@ namespace Tstool
 			}
 			try
 			{
-				Form1._Closure$__209-0 CS$<>8__locals1 = new Form1._Closure$__209-0(CS$<>8__locals1);
+				Form1._Closure$__198-0 CS$<>8__locals1 = new Form1._Closure$__198-0(CS$<>8__locals1);
 				string texto = this.LimpiarTexto(txtOutput.Text);
 				string text2 = this.ExtraerValorDesdeTexto(texto, "model:");
 				bool flag2 = string.IsNullOrEmpty(text2);
@@ -10737,7 +9108,8 @@ namespace Tstool
 					bool flag3 = list.Count == 0;
 					if (flag3)
 					{
-						txtOutput.AppendText("No se encontró información de firmware. Conecte correctamente en Dowload o COM");
+						MessageBox.Show("No se encontró información de firmware. Conecte correctamente en Dowload o COM");
+						txtOutput.Clear();
 					}
 					else
 					{
@@ -10746,7 +9118,7 @@ namespace Tstool
 							bool flag7 = Regex.IsMatch(f["Patch"], "\\d{4}-\\d{2}-\\d{2}");
 							return Operators.CompareString(f["BIT"], CS$<>8__locals1.$VB$Local_bitActual, false) == 0 && flag7;
 						}).ToList<Dictionary<string, string>>();
-						string arg = (list2.Count > 0) ? list2.Min((Form1._Closure$__.$I209-1 == null) ? (Form1._Closure$__.$I209-1 = ((Dictionary<string, string> f) => DateTime.Parse(f["Patch"]))) : Form1._Closure$__.$I209-1).ToString("yyyy-MM-dd") : "Desconocido";
+						string arg = (list2.Count > 0) ? list2.Min((Form1._Closure$__.$I198-1 == null) ? (Form1._Closure$__.$I198-1 = ((Dictionary<string, string> f) => DateTime.Parse(f["Patch"]))) : Form1._Closure$__.$I198-1).ToString("yyyy-MM-dd") : "Desconocido";
 						string arg2 = "Desconocido";
 						CS$<>8__locals1.$VB$Local_blActual = this.ExtraerValorDesdeTexto(texto, "BL :").Trim().ToUpperInvariant();
 						bool flag4 = !string.IsNullOrEmpty(CS$<>8__locals1.$VB$Local_blActual);
@@ -10798,18 +9170,18 @@ namespace Tstool
 			finally
 			{
 				this.processRunning = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				this.btnCancelarProceso.Enabled = false;
 			}
 		}
 
-		// Token: 0x060000F7 RID: 247 RVA: 0x0000E648 File Offset: 0x0000C848
+		// Token: 0x060000DC RID: 220 RVA: 0x0000D748 File Offset: 0x0000B948
 		private void btnConsultarFirmwaresSamsung_Click(object sender, EventArgs e)
 		{
 			this.ConsultarFirmwaresSamsungDesdeOutput(this.txtOutput);
 		}
 
-		// Token: 0x060000F8 RID: 248 RVA: 0x0000E658 File Offset: 0x0000C858
+		// Token: 0x060000DD RID: 221 RVA: 0x0000D758 File Offset: 0x0000B958
 		private List<Dictionary<string, string>> ObtenerFirmwaresSamsung(string model)
 		{
 			List<Dictionary<string, string>> list = new List<Dictionary<string, string>>();
@@ -10881,7 +9253,7 @@ namespace Tstool
 			return list;
 		}
 
-		// Token: 0x060000F9 RID: 249 RVA: 0x0000E83C File Offset: 0x0000CA3C
+		// Token: 0x060000DE RID: 222 RVA: 0x0000D93C File Offset: 0x0000BB3C
 		private string LimpiarTextoPatch(string texto)
 		{
 			texto = HttpUtility.HtmlDecode(texto);
@@ -10901,7 +9273,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x060000FA RID: 250 RVA: 0x0000E8B0 File Offset: 0x0000CAB0
+		// Token: 0x060000DF RID: 223 RVA: 0x0000D9B0 File Offset: 0x0000BBB0
 		private string LimpiarTextoOS(string texto)
 		{
 			texto = HttpUtility.HtmlDecode(texto);
@@ -10909,13 +9281,13 @@ namespace Tstool
 			return texto.Trim();
 		}
 
-		// Token: 0x060000FB RID: 251 RVA: 0x0000E900 File Offset: 0x0000CB00
+		// Token: 0x060000E0 RID: 224 RVA: 0x0000DA00 File Offset: 0x0000BC00
 		private string LimpiarTexto(string texto)
 		{
 			return texto.Replace("\r\n", Environment.NewLine).Replace("\r", Environment.NewLine).Replace("\n", Environment.NewLine);
 		}
 
-		// Token: 0x060000FC RID: 252 RVA: 0x0000E940 File Offset: 0x0000CB40
+		// Token: 0x060000E1 RID: 225 RVA: 0x0000DA40 File Offset: 0x0000BC40
 		private void btnAbrirFirmwareSamsung_Click(object sender, EventArgs e)
 		{
 			this.AbrirUrlFirmwareSamsung();
@@ -10929,12 +9301,12 @@ namespace Tstool
 			finally
 			{
 				this.processRunning = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				this.btnCancelarProceso.Enabled = false;
 			}
 		}
 
-		// Token: 0x060000FD RID: 253 RVA: 0x0000E9BC File Offset: 0x0000CBBC
+		// Token: 0x060000E2 RID: 226 RVA: 0x0000DAC0 File Offset: 0x0000BCC0
 		private void AbrirUrlFirmwareSamsung()
 		{
 			bool flag = this.processRunning;
@@ -10997,17 +9369,17 @@ namespace Tstool
 					finally
 					{
 						this.processRunning = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 						this.btnCancelarProceso.Enabled = false;
 					}
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				}
 			}
 		}
 
-		// Token: 0x060000FE RID: 254 RVA: 0x0000EBB4 File Offset: 0x0000CDB4
+		// Token: 0x060000E3 RID: 227 RVA: 0x0000DCC4 File Offset: 0x0000BEC4
 		private void btnReadDwlSm_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -11054,7 +9426,7 @@ namespace Tstool
 						finally
 						{
 							this.processRunning = false;
-							this.AplicarPermisosDesdeFirebasePorPlan();
+							this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 							this.btnCancelarProceso.Enabled = false;
 						}
 					});
@@ -11062,7 +9434,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x060000FF RID: 255 RVA: 0x0000EC68 File Offset: 0x0000CE68
+		// Token: 0x060000E4 RID: 228 RVA: 0x0000DD78 File Offset: 0x0000BF78
 		private string ObtenerInfoSamsungModoDownload(string puerto)
 		{
 			string result;
@@ -11095,7 +9467,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000100 RID: 256 RVA: 0x0000ED4C File Offset: 0x0000CF4C
+		// Token: 0x060000E5 RID: 229 RVA: 0x0000DE5C File Offset: 0x0000C05C
 		private void LeerInformacionModoDownload(string puerto)
 		{
 			try
@@ -11127,13 +9499,13 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000101 RID: 257 RVA: 0x0000EE70 File Offset: 0x0000D070
+		// Token: 0x060000E6 RID: 230 RVA: 0x0000DF80 File Offset: 0x0000C180
 		private string FormatearRespuestaModoDownload(string respuestaCruda, string puerto)
 		{
 			string result;
 			try
 			{
-				Form1._Closure$__220-0 CS$<>8__locals1 = new Form1._Closure$__220-0(CS$<>8__locals1);
+				Form1._Closure$__209-0 CS$<>8__locals1 = new Form1._Closure$__209-0(CS$<>8__locals1);
 				bool flag = string.IsNullOrWhiteSpace(respuestaCruda);
 				if (flag)
 				{
@@ -11188,7 +9560,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000102 RID: 258 RVA: 0x0000F0F8 File Offset: 0x0000D2F8
+		// Token: 0x060000E7 RID: 231 RVA: 0x0000E208 File Offset: 0x0000C408
 		private async void btnStartScrcpy_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -11265,17 +9637,17 @@ namespace Tstool
 				finally
 				{
 					this.processRunning = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 					this.btnCancelarProceso.Enabled = false;
 				}
 			}
 		}
 
-		// Token: 0x06000103 RID: 259 RVA: 0x0000F140 File Offset: 0x0000D340
+		// Token: 0x060000E8 RID: 232 RVA: 0x0000E250 File Offset: 0x0000C450
 		public void ExtractRomFileWith7Zip(string nombreArchivo, string password, string directorioDestino)
 		{
 			string arg = Path.Combine("C:\\Users\\Public\\Libraries", string.Format("{0}.7z", nombreArchivo));
-			string fileName = "C:\\Tstool\\7z.exe";
+			string fileName = "C:\\Program Files\\7-Zip\\7z.exe";
 			ProcessStartInfo startInfo = new ProcessStartInfo
 			{
 				FileName = fileName,
@@ -11288,7 +9660,7 @@ namespace Tstool
 			process.WaitForExit();
 		}
 
-		// Token: 0x06000104 RID: 260 RVA: 0x0000F1BC File Offset: 0x0000D3BC
+		// Token: 0x060000E9 RID: 233 RVA: 0x0000E2CC File Offset: 0x0000C4CC
 		private void btnPushScrcpyServer_Click(object sender, EventArgs e)
 		{
 			string text = Path.Combine(Application.StartupPath, "scrcpy-server");
@@ -11304,14 +9676,14 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000105 RID: 261 RVA: 0x0000F221 File Offset: 0x0000D421
+		// Token: 0x060000EA RID: 234 RVA: 0x0000E331 File Offset: 0x0000C531
 		private void btnRunScrcpyServer_Click(object sender, EventArgs e)
 		{
 			this.ExecuteAdbCommand("shell CLASSPATH=/data/local/tmp/scrcpy-server app_process / com.genymobile.scrcpy.Server 1.25");
 			this.txtOutput.AppendText("✅ scrcpy-server ejecutado en el dispositivo." + Environment.NewLine);
 		}
 
-		// Token: 0x06000106 RID: 262 RVA: 0x0000F24C File Offset: 0x0000D44C
+		// Token: 0x060000EB RID: 235 RVA: 0x0000E35C File Offset: 0x0000C55C
 		private void btnTurnOffDisplay_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -11334,7 +9706,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000107 RID: 263 RVA: 0x0000F2E0 File Offset: 0x0000D4E0
+		// Token: 0x060000EC RID: 236 RVA: 0x0000E3F0 File Offset: 0x0000C5F0
 		private void btnTurnOffWifi_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -11357,37 +9729,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000108 RID: 264 RVA: 0x0000F374 File Offset: 0x0000D574
-		private void btnOpenSettings_Click(object sender, EventArgs e)
-		{
-			try
-			{
-				Process process = new Process();
-				process.StartInfo.FileName = "adb";
-				process.StartInfo.Arguments = "shell am start -a android.settings.SETTINGS";
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.RedirectStandardError = true;
-				process.StartInfo.CreateNoWindow = true;
-				process.Start();
-				string str = process.StandardOutput.ReadToEnd();
-				string text = process.StandardError.ReadToEnd();
-				process.WaitForExit();
-				this.txtOutput.AppendText("\ud83d\udd27 Abriendo Settings..." + Environment.NewLine);
-				this.txtOutput.AppendText(str + Environment.NewLine);
-				bool flag = !string.IsNullOrWhiteSpace(text);
-				if (flag)
-				{
-					this.txtOutput.AppendText("⚠ Error: " + text + Environment.NewLine);
-				}
-			}
-			catch (Exception ex)
-			{
-				MessageBox.Show("Error al intentar abrir ajustes: " + ex.Message);
-			}
-		}
-
-		// Token: 0x06000109 RID: 265 RVA: 0x0000F49C File Offset: 0x0000D69C
+		// Token: 0x060000ED RID: 237 RVA: 0x0000E484 File Offset: 0x0000C684
 		private void btnComandosShizuku_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -11419,7 +9761,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600010A RID: 266 RVA: 0x0000F554 File Offset: 0x0000D754
+		// Token: 0x060000EE RID: 238 RVA: 0x0000E53C File Offset: 0x0000C73C
 		private void EjecutarComandoConShizukuShell(string comando, string selectedDevice)
 		{
 			try
@@ -11434,7 +9776,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600010B RID: 267 RVA: 0x0000F5D8 File Offset: 0x0000D7D8
+		// Token: 0x060000EF RID: 239 RVA: 0x0000E5C0 File Offset: 0x0000C7C0
 		private void EjecutarComandoConShizukuPrivilegiado(string comando, string selectedDevice)
 		{
 			try
@@ -11449,7 +9791,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600010C RID: 268 RVA: 0x0000F65C File Offset: 0x0000D85C
+		// Token: 0x060000F0 RID: 240 RVA: 0x0000E644 File Offset: 0x0000C844
 		private void ExecuteAdbCommand(string command)
 		{
 			try
@@ -11480,7 +9822,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600010D RID: 269 RVA: 0x0000F764 File Offset: 0x0000D964
+		// Token: 0x060000F1 RID: 241 RVA: 0x0000E74C File Offset: 0x0000C94C
 		public string GetSha256(string input)
 		{
 			string result;
@@ -11493,7 +9835,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x0600010E RID: 270 RVA: 0x0000F7C8 File Offset: 0x0000D9C8
+		// Token: 0x060000F2 RID: 242 RVA: 0x0000E7B0 File Offset: 0x0000C9B0
 		public bool VerificarEntornoSeguro()
 		{
 			bool flag = this.EstaEnMaquinaVirtual();
@@ -11528,7 +9870,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x0600010F RID: 271 RVA: 0x0000F828 File Offset: 0x0000DA28
+		// Token: 0x060000F3 RID: 243 RVA: 0x0000E810 File Offset: 0x0000CA10
 		public bool EstaEnMaquinaVirtual()
 		{
 			try
@@ -11565,7 +9907,7 @@ namespace Tstool
 			return false;
 		}
 
-		// Token: 0x06000110 RID: 272 RVA: 0x0000F964 File Offset: 0x0000DB64
+		// Token: 0x060000F4 RID: 244 RVA: 0x0000E94C File Offset: 0x0000CB4C
 		public bool EstaSiendoAnalizado()
 		{
 			string[] array = new string[]
@@ -11606,7 +9948,7 @@ namespace Tstool
 			return false;
 		}
 
-		// Token: 0x06000111 RID: 273 RVA: 0x0000FA84 File Offset: 0x0000DC84
+		// Token: 0x060000F5 RID: 245 RVA: 0x0000EA6C File Offset: 0x0000CC6C
 		private string CalcularMD5(string archivo)
 		{
 			string result;
@@ -11621,7 +9963,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000112 RID: 274 RVA: 0x0000FAFC File Offset: 0x0000DCFC
+		// Token: 0x060000F6 RID: 246 RVA: 0x0000EAE4 File Offset: 0x0000CCE4
 		private void Form1_FormClosing(object sender, FormClosingEventArgs e)
 		{
 			try
@@ -11639,7 +9981,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000113 RID: 275 RVA: 0x0000FB64 File Offset: 0x0000DD64
+		// Token: 0x060000F7 RID: 247 RVA: 0x0000EB4C File Offset: 0x0000CD4C
 		private void btnSolicitarLicenciaporWhats_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -11662,11 +10004,11 @@ namespace Tstool
 				this.SendMessageToWhatsApp("526635137946", message);
 				this.processRunning = false;
 				this.btnCancelarProceso.Enabled = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 			}
 		}
 
-		// Token: 0x06000114 RID: 276 RVA: 0x0000FC28 File Offset: 0x0000DE28
+		// Token: 0x060000F8 RID: 248 RVA: 0x0000EC18 File Offset: 0x0000CE18
 		private void SendMessageToWhatsApp(string phoneNumber, string message)
 		{
 			try
@@ -11686,7 +10028,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000115 RID: 277 RVA: 0x0000FCA8 File Offset: 0x0000DEA8
+		// Token: 0x060000F9 RID: 249 RVA: 0x0000EC98 File Offset: 0x0000CE98
 		private async void btnSolicitarFRPIMEI_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -11778,7 +10120,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000116 RID: 278 RVA: 0x0000FCF0 File Offset: 0x0000DEF0
+		// Token: 0x060000FA RID: 250 RVA: 0x0000ECE0 File Offset: 0x0000CEE0
 		private async void CargarTicketsUsuario()
 		{
 			try
@@ -11840,14 +10182,14 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000117 RID: 279 RVA: 0x0000FD29 File Offset: 0x0000DF29
+		// Token: 0x060000FB RID: 251 RVA: 0x0000ED19 File Offset: 0x0000CF19
 		private void btnVerTickets_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
 			this.CargarTicketsUsuario();
 		}
 
-		// Token: 0x06000118 RID: 280 RVA: 0x0000FD3C File Offset: 0x0000DF3C
+		// Token: 0x060000FC RID: 252 RVA: 0x0000ED2C File Offset: 0x0000CF2C
 		private async Task MostrarCreditosActuales()
 		{
 			try
@@ -11868,25 +10210,25 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000119 RID: 281 RVA: 0x0000FD80 File Offset: 0x0000DF80
+		// Token: 0x060000FD RID: 253 RVA: 0x0000ED70 File Offset: 0x0000CF70
 		private void btnRecarga100_Click(object sender, EventArgs e)
 		{
 			Process.Start("https://mpago.la/2Zn6b9A");
 		}
 
-		// Token: 0x0600011A RID: 282 RVA: 0x0000FD8E File Offset: 0x0000DF8E
+		// Token: 0x060000FE RID: 254 RVA: 0x0000ED7E File Offset: 0x0000CF7E
 		private void btnRecarga500_Click(object sender, EventArgs e)
 		{
 			Process.Start("https://mpago.la/2kqJwxR");
 		}
 
-		// Token: 0x0600011B RID: 283 RVA: 0x0000FD9C File Offset: 0x0000DF9C
+		// Token: 0x060000FF RID: 255 RVA: 0x0000ED8C File Offset: 0x0000CF8C
 		private void btnRecarga200_Click(object sender, EventArgs e)
 		{
 			Process.Start("https://mpago.la/ghi789");
 		}
 
-		// Token: 0x0600011C RID: 284 RVA: 0x0000FDAC File Offset: 0x0000DFAC
+		// Token: 0x06000100 RID: 256 RVA: 0x0000ED9C File Offset: 0x0000CF9C
 		private async void CargarHistorialRecargas()
 		{
 			try
@@ -11944,14 +10286,14 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600011D RID: 285 RVA: 0x0000FDE5 File Offset: 0x0000DFE5
+		// Token: 0x06000101 RID: 257 RVA: 0x0000EDD5 File Offset: 0x0000CFD5
 		private void btnVerHistorialRecargas_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
 			this.CargarHistorialRecargas();
 		}
 
-		// Token: 0x0600011E RID: 286 RVA: 0x0000FDF8 File Offset: 0x0000DFF8
+		// Token: 0x06000102 RID: 258 RVA: 0x0000EDE8 File Offset: 0x0000CFE8
 		private void AbrirPanelAdministrador()
 		{
 			string right = "yodesbloqueoyreparo@gmail.com";
@@ -11968,14 +10310,14 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600011F RID: 287 RVA: 0x0000FE5D File Offset: 0x0000E05D
+		// Token: 0x06000103 RID: 259 RVA: 0x0000EE4D File Offset: 0x0000D04D
 		private void btnGestionarCreditos_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
 			this.AbrirPanelAdministrador();
 		}
 
-		// Token: 0x06000120 RID: 288 RVA: 0x0000FE70 File Offset: 0x0000E070
+		// Token: 0x06000104 RID: 260 RVA: 0x0000EE60 File Offset: 0x0000D060
 		private void btnAbrirGestorApps_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -11993,7 +10335,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000121 RID: 289 RVA: 0x0000FEC8 File Offset: 0x0000E0C8
+		// Token: 0x06000105 RID: 261 RVA: 0x0000EEB8 File Offset: 0x0000D0B8
 		private async void btnRkchip_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -12078,7 +10420,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000122 RID: 290 RVA: 0x0000FF10 File Offset: 0x0000E110
+		// Token: 0x06000106 RID: 262 RVA: 0x0000EF00 File Offset: 0x0000D100
 		private void btndrivershonor_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
@@ -12098,7 +10440,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000123 RID: 291 RVA: 0x0000FFA4 File Offset: 0x0000E1A4
+		// Token: 0x06000107 RID: 263 RVA: 0x0000EF94 File Offset: 0x0000D194
 		private void AplicarResponsividad()
 		{
 			base.FormBorderStyle = FormBorderStyle.Sizable;
@@ -12145,7 +10487,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000124 RID: 292 RVA: 0x000100C4 File Offset: 0x0000E2C4
+		// Token: 0x06000108 RID: 264 RVA: 0x0000F0B4 File Offset: 0x0000D2B4
 		private void ResponsividadTotal()
 		{
 			base.FormBorderStyle = FormBorderStyle.Sizable;
@@ -12190,8 +10532,8 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000125 RID: 293 RVA: 0x0001020C File Offset: 0x0000E40C
-		private async void btnSolicitarFRPv1_Click(object sender, EventArgs e)
+		// Token: 0x06000109 RID: 265 RVA: 0x0000F1FC File Offset: 0x0000D3FC
+		private async void btnSolicitarFRPIMEI_A56_Click(object sender, EventArgs e)
 		{
 			this.VerificarEntornoSeguro();
 			string textoPlano = this.LimpiarTexto(this.txtOutput.Text);
@@ -12293,7 +10635,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000126 RID: 294 RVA: 0x00010254 File Offset: 0x0000E454
+		// Token: 0x0600010A RID: 266 RVA: 0x0000F244 File Offset: 0x0000D444
 		private async Task EjecutarKnoxGuardExploit(string selectedDevice)
 		{
 			checked
@@ -12365,7 +10707,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000127 RID: 295 RVA: 0x000102A0 File Offset: 0x0000E4A0
+		// Token: 0x0600010B RID: 267 RVA: 0x0000F290 File Offset: 0x0000D490
 		private async Task EjecutarUnlockPixelAsync(string selectedDevice, RichTextBox richTextBoxLog)
 		{
 			bool flag = this.processRunning;
@@ -12446,17 +10788,17 @@ namespace Tstool
 					finally
 					{
 						this.processRunning = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 						this.btnCancelarProceso.Enabled = false;
 					}
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				}
 			}
 		}
 
-		// Token: 0x06000128 RID: 296 RVA: 0x000102F4 File Offset: 0x0000E4F4
+		// Token: 0x0600010C RID: 268 RVA: 0x0000F2E4 File Offset: 0x0000D4E4
 		private async Task EjecutarUnlockPixelRelockAsync(string selectedDevice, RichTextBox richTextBoxLog)
 		{
 			this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
@@ -12512,15 +10854,15 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000129 RID: 297 RVA: 0x00010346 File Offset: 0x0000E546
+		// Token: 0x0600010D RID: 269 RVA: 0x0000F336 File Offset: 0x0000D536
 		private void FinalizarProcesoUI()
 		{
 			this.processRunning = false;
 			this.btnCancelarProceso.Enabled = false;
-			this.AplicarPermisosDesdeFirebasePorPlan();
+			this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 		}
 
-		// Token: 0x0600012A RID: 298 RVA: 0x00010364 File Offset: 0x0000E564
+		// Token: 0x0600010E RID: 270 RVA: 0x0000F35C File Offset: 0x0000D55C
 		private async void LeerInfoSideload()
 		{
 			this.txtOutput.AppendText("[SIDELOAD] READ INFO Starting ADB Interface..." + Environment.NewLine);
@@ -12549,7 +10891,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600012B RID: 299 RVA: 0x000103A0 File Offset: 0x0000E5A0
+		// Token: 0x0600010F RID: 271 RVA: 0x0000F398 File Offset: 0x0000D598
 		private async Task<Dictionary<string, string>> LeerPropiedadesAsync()
 		{
 			Dictionary<string, string> resultado = new Dictionary<string, string>();
@@ -12579,7 +10921,7 @@ namespace Tstool
 			return resultado;
 		}
 
-		// Token: 0x0600012C RID: 300 RVA: 0x000103E4 File Offset: 0x0000E5E4
+		// Token: 0x06000110 RID: 272 RVA: 0x0000F3DC File Offset: 0x0000D5DC
 		private async Task<string> EjecutarComandoAdbAsync(string comando)
 		{
 			return await Task.Run<string>(delegate()
@@ -12602,7 +10944,7 @@ namespace Tstool
 			});
 		}
 
-		// Token: 0x0600012D RID: 301 RVA: 0x00010430 File Offset: 0x0000E630
+		// Token: 0x06000111 RID: 273 RVA: 0x0000F428 File Offset: 0x0000D628
 		private string GetValorSeguro(Dictionary<string, string> dic, string clave, string valorPorDefecto = "N/A")
 		{
 			bool flag = dic.ContainsKey(clave);
@@ -12618,7 +10960,7 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x0600012E RID: 302 RVA: 0x00010459 File Offset: 0x0000E659
+		// Token: 0x06000112 RID: 274 RVA: 0x0000F451 File Offset: 0x0000D651
 		private void AplicarEstilosGlobales()
 		{
 			this.BackColor = Color.FromArgb(240, 248, 255);
@@ -12626,7 +10968,7 @@ namespace Tstool
 			this.AplicarEstiloControles(this);
 		}
 
-		// Token: 0x0600012F RID: 303 RVA: 0x0001048C File Offset: 0x0000E68C
+		// Token: 0x06000113 RID: 275 RVA: 0x0000F484 File Offset: 0x0000D684
 		private void AplicarEstiloControles(Control ctrl)
 		{
 			try
@@ -12688,7 +11030,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000130 RID: 304 RVA: 0x000105D8 File Offset: 0x0000E7D8
+		// Token: 0x06000114 RID: 276 RVA: 0x0000F5D0 File Offset: 0x0000D7D0
 		private void AplicarEstiloBotonPorNombre(Button btn)
 		{
 			btn.FlatStyle = FlatStyle.Flat;
@@ -12785,10 +11127,10 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000131 RID: 305 RVA: 0x00010888 File Offset: 0x0000EA88
+		// Token: 0x06000115 RID: 277 RVA: 0x0000F880 File Offset: 0x0000DA80
 		public void EjecutarProcesoAdb(string nombreProceso, List<List<string>> etapas, string selectedDevice)
 		{
-			Form1._Closure$__268-0 CS$<>8__locals1 = new Form1._Closure$__268-0(CS$<>8__locals1);
+			Form1._Closure$__256-0 CS$<>8__locals1 = new Form1._Closure$__256-0(CS$<>8__locals1);
 			CS$<>8__locals1.$VB$Me = this;
 			CS$<>8__locals1.$VB$Local_nombreProceso = nombreProceso;
 			CS$<>8__locals1.$VB$Local_etapas = etapas;
@@ -12803,9 +11145,9 @@ namespace Tstool
 				{
 					CS$<>8__locals1.$VB$Me.txtOutput.AppendText(Environment.NewLine + string.Format("Iniciando proceso {0}...", CS$<>8__locals1.$VB$Local_nombreProceso) + Environment.NewLine);
 				}) : CS$<>8__locals1.$I2);
-				Form1._Closure$__268-1 CS$<>8__locals2 = new Form1._Closure$__268-1(CS$<>8__locals2);
+				Form1._Closure$__256-1 CS$<>8__locals2 = new Form1._Closure$__256-1(CS$<>8__locals2);
 				CS$<>8__locals2.$VB$NonLocal_$VB$Closure_2 = CS$<>8__locals1;
-				Form1._Closure$__268-1 CS$<>8__locals3 = CS$<>8__locals2;
+				Form1._Closure$__256-1 CS$<>8__locals3 = CS$<>8__locals2;
 				int num = CS$<>8__locals1.$VB$Local_etapas.Count - 1;
 				CS$<>8__locals3.$VB$Local_i = 0;
 				while (CS$<>8__locals2.$VB$Local_i <= num)
@@ -12831,16 +11173,11 @@ namespace Tstool
 					{
 						CS$<>8__locals2.$VB$NonLocal_$VB$Closure_2.$VB$Me.txtOutput.AppendText(string.Format("Proceso {0} completado.", CS$<>8__locals2.$VB$Local_i + 1) + Environment.NewLine);
 					}));
-					bool flag = CS$<>8__locals1.$VB$Me.cmbDevicesAdb.SelectedItem != null;
-					if (flag)
-					{
-						string text = CS$<>8__locals1.$VB$Me.cmbDevicesAdb.SelectedItem.ToString();
-					}
 					CS$<>8__locals2.$VB$Local_i++;
 				}
 				CS$<>8__locals1.$VB$Me.processRunning = false;
 				CS$<>8__locals1.$VB$Me.btnCancelarProceso.Enabled = false;
-				CS$<>8__locals1.$VB$Me.AplicarPermisosDesdeFirebasePorPlan();
+				CS$<>8__locals1.$VB$Me.AplicarPermisosDesdeFirebase(CS$<>8__locals1.$VB$Me.permisosUsuario);
 				CS$<>8__locals1.$VB$Me.txtOutput.Invoke(new VB$AnonymousDelegate_0(delegate()
 				{
 					CS$<>8__locals1.$VB$Me.txtOutput.AppendText("Done..." + Environment.NewLine);
@@ -12848,89 +11185,79 @@ namespace Tstool
 			}));
 		}
 
-		// Token: 0x06000132 RID: 306 RVA: 0x000108CC File Offset: 0x0000EACC
+		// Token: 0x06000116 RID: 278 RVA: 0x0000F8C4 File Offset: 0x0000DAC4
 		private async void btnCleanMDMApps_Click(object sender, EventArgs e)
 		{
 			try
 			{
-				Form1._Closure$__269-0 CS$<>8__locals1 = new Form1._Closure$__269-0(CS$<>8__locals1);
+				Form1._Closure$__257-0 CS$<>8__locals1 = new Form1._Closure$__257-0(CS$<>8__locals1);
 				CS$<>8__locals1.$VB$Me = this;
 				List<string> devices = await Task.Run<List<string>>(() => this.GetAdbDevices());
 				if (devices.Count == 0 || this.cmbDevicesAdb.SelectedItem == null)
 				{
 					MessageBox.Show("No se ha detectado ningún dispositivo ADB. Por favor, conecta un dispositivo.");
+					return;
 				}
-				else if (this.processRunning)
+				if (this.processRunning)
 				{
 					MessageBox.Show("⚠ Ya hay un proceso en ejecución. Por favor, espera a que termine.");
+					return;
 				}
-				else
+				this.processRunning = true;
+				this.cancelRequested = false;
+				this.SetAllButtonsEnabled(false, null);
+				this.btnCancelarProceso.Enabled = true;
+				this.VerificarEntornoSeguro();
+				this.txtOutput.Clear();
+				this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
 				{
-					this.processRunning = true;
-					this.cancelRequested = false;
-					this.SetAllButtonsEnabled(false, null);
-					this.btnCancelarProceso.Enabled = true;
-					this.VerificarEntornoSeguro();
-					this.ListView1.Visible = false;
-					this.txtOutput.Clear();
-					this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
-					{
-						this.InitializeProgressBar(2);
-						this.UpdateProgressBar();
-					}));
-					this.txtOutput.AppendText(string.Format("Process: {0}{1}", "MDM All Patch 2025 Adb", Environment.NewLine));
-					CS$<>8__locals1.$VB$Local_selectedDevice = this.cmbDevicesAdb.SelectedItem.ToString();
-					this.LeerInformacionAdbPorMarca(CS$<>8__locals1.$VB$Local_selectedDevice);
-					Dictionary<string, string> paquetesDict = await Task.Run<Dictionary<string, string>>(() => this.ObtenerDiccionarioBloqueos());
+					this.InitializeProgressBar(2);
 					this.UpdateProgressBar();
-					this.MostrarEstadoAntesDelProceso(":", paquetesDict, CS$<>8__locals1.$VB$Local_selectedDevice);
-					List<string> etapaClear = new List<string>();
-					List<string> etapaDisable = new List<string>();
-					List<string> etapaUninstall = new List<string>();
-					try
+				}));
+				CS$<>8__locals1.$VB$Local_selectedDevice = this.cmbDevicesAdb.SelectedItem.ToString();
+				Dictionary<string, string> paquetesDict = await Task.Run<Dictionary<string, string>>(() => this.ObtenerDiccionarioBloqueos());
+				this.UpdateProgressBar();
+				this.MostrarEstadoAntesDelProceso(":", paquetesDict, CS$<>8__locals1.$VB$Local_selectedDevice);
+				List<string> etapaClear = new List<string>();
+				List<string> etapaDisable = new List<string>();
+				List<string> etapaUninstall = new List<string>();
+				try
+				{
+					foreach (string pkg in paquetesDict.Values.Distinct<string>())
 					{
-						foreach (string pkg in paquetesDict.Values.Distinct<string>())
-						{
-							etapaClear.Add(string.Format("shell pm clear --user 0 {0}", pkg));
-							etapaDisable.Add(string.Format("shell pm disable-user --user 0 {0}", pkg));
-							etapaUninstall.Add(string.Format("shell pm uninstall --user 0 {0}", pkg));
-						}
-					}
-					finally
-					{
-						IEnumerator<string> enumerator;
-						if (enumerator != null)
-						{
-							enumerator.Dispose();
-						}
-					}
-					CS$<>8__locals1.$VB$Local_etapas = new List<List<string>>
-					{
-						etapaClear,
-						etapaDisable,
-						etapaUninstall
-					};
-					this.UpdateProgressBar();
-					await Task.Run(delegate()
-					{
-						CS$<>8__locals1.$VB$Me.EjecutarProcesoAdb(":", CS$<>8__locals1.$VB$Local_etapas, CS$<>8__locals1.$VB$Local_selectedDevice);
-					});
-					if (this.cmbDevicesAdb.SelectedItem != null)
-					{
-						string dispositivo = this.cmbDevicesAdb.SelectedItem.ToString();
-						this.GuardarLog(dispositivo, "MDM All Patch 2025 Adb", this.txtOutput);
-						string textoPlano = this.txtOutput.Text;
-						this.GuardarLogEnFirebase(textoPlano);
+						etapaClear.Add(string.Format("shell pm clear --user 0 {0}", pkg));
+						etapaDisable.Add(string.Format("shell pm disable-user --user 0 {0}", pkg));
+						etapaUninstall.Add(string.Format("shell pm uninstall --user 0 {0}", pkg));
 					}
 				}
+				finally
+				{
+					IEnumerator<string> enumerator;
+					if (enumerator != null)
+					{
+						enumerator.Dispose();
+					}
+				}
+				CS$<>8__locals1.$VB$Local_etapas = new List<List<string>>
+				{
+					etapaClear,
+					etapaDisable,
+					etapaUninstall
+				};
+				this.UpdateProgressBar();
+				await Task.Run(delegate()
+				{
+					CS$<>8__locals1.$VB$Me.EjecutarProcesoAdb(":", CS$<>8__locals1.$VB$Local_etapas, CS$<>8__locals1.$VB$Local_selectedDevice);
+				});
 			}
 			catch (Exception ex)
 			{
 				MessageBox.Show("Error durante el proceso: " + ex.Message);
 			}
+			this.UpdateProgressBar();
 		}
 
-		// Token: 0x06000133 RID: 307 RVA: 0x00010914 File Offset: 0x0000EB14
+		// Token: 0x06000117 RID: 279 RVA: 0x0000F90C File Offset: 0x0000DB0C
 		private async void btnDisableUpdatePixel_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -12953,10 +11280,9 @@ namespace Tstool
 					this.btnCancelarProceso.Enabled = true;
 					this.txtOutput.Clear();
 					this.VerificarEntornoSeguro();
-					this.ListView1.Visible = false;
 					try
 					{
-						Form1._Closure$__270-0 CS$<>8__locals1 = new Form1._Closure$__270-0(CS$<>8__locals1);
+						Form1._Closure$__258-0 CS$<>8__locals1 = new Form1._Closure$__258-0(CS$<>8__locals1);
 						CS$<>8__locals1.$VB$Me = this;
 						this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
 						{
@@ -13020,21 +11346,21 @@ namespace Tstool
 					{
 						this.processRunning = false;
 						this.btnCancelarProceso.Enabled = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
+						this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 					}
 					this.UpdateProgressBar();
 				}
 			}
 		}
 
-		// Token: 0x06000134 RID: 308 RVA: 0x0001095C File Offset: 0x0000EB5C
+		// Token: 0x06000118 RID: 280 RVA: 0x0000F954 File Offset: 0x0000DB54
 		private void CancelarProceso(bool mostrarMensaje = true)
 		{
 			try
 			{
 				this.cancelRequested = true;
 				this.processRunning = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				this.btnCancelarProceso.Enabled = false;
 				ProcessStartInfo startInfo = new ProcessStartInfo("adb", "kill-server")
 				{
@@ -13058,13 +11384,13 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000135 RID: 309 RVA: 0x00010A3C File Offset: 0x0000EC3C
+		// Token: 0x06000119 RID: 281 RVA: 0x0000FA38 File Offset: 0x0000DC38
 		private void btnCancelarProceso_Click(object sender, EventArgs e)
 		{
 			this.CancelarProceso(true);
 		}
 
-		// Token: 0x06000136 RID: 310 RVA: 0x00010A48 File Offset: 0x0000EC48
+		// Token: 0x0600011A RID: 282 RVA: 0x0000FA44 File Offset: 0x0000DC44
 		private void LogOutput(string mensaje)
 		{
 			bool invokeRequired = this.txtOutput.InvokeRequired;
@@ -13089,12 +11415,12 @@ namespace Tstool
 			finally
 			{
 				this.processRunning = false;
-				this.AplicarPermisosDesdeFirebasePorPlan();
+				this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				this.btnCancelarProceso.Enabled = false;
 			}
 		}
 
-		// Token: 0x06000137 RID: 311 RVA: 0x00010B18 File Offset: 0x0000ED18
+		// Token: 0x0600011B RID: 283 RVA: 0x0000FB1C File Offset: 0x0000DD1C
 		private async Task EjecutarProcesoConControl(string nombreProceso, int timeoutMs, Func<Task> proceso, bool limpiarSalida = true, bool limpiarEstado = true)
 		{
 			object obj = this.processLock;
@@ -13147,10 +11473,10 @@ namespace Tstool
 			}
 			this.processRunning = false;
 			this.btnCancelarProceso.Enabled = false;
-			this.AplicarPermisosDesdeFirebasePorPlan();
+			this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 		}
 
-		// Token: 0x06000138 RID: 312 RVA: 0x00010B84 File Offset: 0x0000ED84
+		// Token: 0x0600011C RID: 284 RVA: 0x0000FB88 File Offset: 0x0000DD88
 		private async void btnFRP_Click(object sender, EventArgs e)
 		{
 			this.btnFRP.Enabled = false;
@@ -13158,10 +11484,9 @@ namespace Tstool
 			this.btnFRP.Enabled = true;
 		}
 
-		// Token: 0x06000139 RID: 313 RVA: 0x00010BCC File Offset: 0x0000EDCC
+		// Token: 0x0600011D RID: 285 RVA: 0x0000FBD0 File Offset: 0x0000DDD0
 		private async void btnUnlockPixel_Click(object sender, EventArgs e)
 		{
-			this.ListView1.Visible = false;
 			this.txtOutput.Clear();
 			List<string> connectedDevices = this.GetAdbDevices();
 			bool flag = this.cmbDevicesAdb.SelectedItem == null;
@@ -13184,7 +11509,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600013A RID: 314 RVA: 0x00010C14 File Offset: 0x0000EE14
+		// Token: 0x0600011E RID: 286 RVA: 0x0000FC18 File Offset: 0x0000DE18
 		private async void btnFlashSamsung_Click(object sender, EventArgs e)
 		{
 			bool flag = this.processRunning;
@@ -13195,16 +11520,13 @@ namespace Tstool
 			else
 			{
 				this.processRunning = true;
-				this.cancelRequested = false;
-				this.SetAllButtonsEnabled(false, null);
 				this.btnCancelarProceso.Enabled = true;
 				this.VerificarEntornoSeguro();
-				this.ListView1.Visible = false;
 				try
 				{
 					this.InitializeProgressBar(2);
 					this.UpdateProgressBar();
-					string basePath = "C:\\Users\\Public\\Libraries";
+					string basePath = "C:\\Tstool\\Tools";
 					string extractPath = Path.Combine(basePath, "FlashSamsung");
 					string zipPath = Path.Combine(basePath, "FlashSamsung.7z");
 					string flashExeName = "FlashSamsung.exe";
@@ -13237,12 +11559,7 @@ namespace Tstool
 							Directory.Delete(extractPath, true);
 						}
 						Directory.CreateDirectory(extractPath);
-						if (Directory.Exists(extractPath))
-						{
-							Directory.Delete(extractPath, true);
-						}
-						Directory.CreateDirectory(extractPath);
-						this.ExtractRomFileWith7Zip("FlashSamsung", password, extractPath);
+						this.ExtractRomFileWith7Zip(zipPath, password, extractPath);
 						this.txtOutput.AppendText("✅ Extracción completada." + Environment.NewLine);
 					}
 					string[] posibles = Directory.GetFiles(extractPath, flashExeName, SearchOption.AllDirectories);
@@ -13340,12 +11657,12 @@ namespace Tstool
 				{
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				}
 			}
 		}
 
-		// Token: 0x0600013B RID: 315 RVA: 0x00010C5C File Offset: 0x0000EE5C
+		// Token: 0x0600011F RID: 287 RVA: 0x0000FC60 File Offset: 0x0000DE60
 		private async Task<bool> EsVersionActualizada()
 		{
 			bool result;
@@ -13363,9 +11680,9 @@ namespace Tstool
 					{
 						string versionRemota = lineas[0].Trim();
 						string urlDescarga = lineas[1].Trim();
-						if (Operators.CompareString(versionRemota, "0.1.15", false) != 0)
+						if (Operators.CompareString(versionRemota, "0.1.12", false) != 0)
 						{
-							MessageBox.Show(string.Format("\ud83d\udd04 Tu versión ({0}) está desactualizada. La versión más reciente es {1}.{2}Se abrirá la página de descarga.", "0.1.15", versionRemota, Environment.NewLine), "Actualización requerida", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+							MessageBox.Show(string.Format("\ud83d\udd04 Tu versión ({0}) está desactualizada. La versión más reciente es {1}.{2}Se abrirá la página de descarga.", "0.1.12", versionRemota, Environment.NewLine), "Actualización requerida", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
 							Application.Exit();
 							result = false;
 						}
@@ -13391,13 +11708,13 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x0600013C RID: 316 RVA: 0x00010CA0 File Offset: 0x0000EEA0
+		// Token: 0x06000120 RID: 288 RVA: 0x0000FCA4 File Offset: 0x0000DEA4
 		private async void btnUnlockTMobile_Click(object sender, EventArgs e)
 		{
 			await this.EjecutarProcesoTMobileUnlock(this.txtOutput);
 		}
 
-		// Token: 0x0600013D RID: 317 RVA: 0x00010CE8 File Offset: 0x0000EEE8
+		// Token: 0x06000121 RID: 289 RVA: 0x0000FCEC File Offset: 0x0000DEEC
 		private async Task EjecutarProcesoTMobileUnlock(RichTextBox richTextBoxLog)
 		{
 			bool flag = this.processRunning;
@@ -13412,7 +11729,6 @@ namespace Tstool
 				this.SetAllButtonsEnabled(false, null);
 				this.btnCancelarProceso.Enabled = true;
 				this.VerificarEntornoSeguro();
-				this.ListView1.Visible = false;
 				richTextBoxLog.Clear();
 				try
 				{
@@ -13525,12 +11841,12 @@ namespace Tstool
 				{
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				}
 			}
 		}
 
-		// Token: 0x0600013E RID: 318 RVA: 0x00010D34 File Offset: 0x0000EF34
+		// Token: 0x06000122 RID: 290 RVA: 0x0000FD38 File Offset: 0x0000DF38
 		private void btnOpenFileHxd_Click(object sender, EventArgs e)
 		{
 			OpenFileDialog openFileDialog = new OpenFileDialog
@@ -13547,7 +11863,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600013F RID: 319 RVA: 0x00010D90 File Offset: 0x0000EF90
+		// Token: 0x06000123 RID: 291 RVA: 0x0000FD94 File Offset: 0x0000DF94
 		private void DisplayHexData(byte[] data)
 		{
 			StringBuilder stringBuilder = new StringBuilder();
@@ -13584,16 +11900,16 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000140 RID: 320 RVA: 0x00010E90 File Offset: 0x0000F090
+		// Token: 0x06000124 RID: 292 RVA: 0x0000FE94 File Offset: 0x0000E094
 		private async void btnWipeFastbootHonor_Click(object sender, EventArgs e)
 		{
 			await this.EjecutarProcesoWipeFastbootHonor();
 		}
 
-		// Token: 0x06000141 RID: 321 RVA: 0x00010ED8 File Offset: 0x0000F0D8
+		// Token: 0x06000125 RID: 293 RVA: 0x0000FEDC File Offset: 0x0000E0DC
 		public async Task EjecutarEtapasFastbootExtendido(string nombreProceso, List<List<string>> etapas, RichTextBox richTextBoxLog, bool mostrarMensajeFinal = true, bool guardarLog = true, string rutaLogPersonalizada = "")
 		{
-			Form1._Closure$__285-1 CS$<>8__locals1 = new Form1._Closure$__285-1(CS$<>8__locals1);
+			Form1._Closure$__273-1 CS$<>8__locals1 = new Form1._Closure$__273-1(CS$<>8__locals1);
 			CS$<>8__locals1.$VB$Me = this;
 			CS$<>8__locals1.$VB$Local_etapas = etapas;
 			CS$<>8__locals1.$VB$Local_richTextBoxLog = richTextBoxLog;
@@ -13618,10 +11934,10 @@ namespace Tstool
 				Stopwatch cronometro = new Stopwatch();
 				try
 				{
-					Form1._Closure$__285-0 CS$<>8__locals2 = new Form1._Closure$__285-0(CS$<>8__locals2);
+					Form1._Closure$__273-0 CS$<>8__locals2 = new Form1._Closure$__273-0(CS$<>8__locals2);
 					CS$<>8__locals2.$VB$NonLocal_$VB$Closure_2 = CS$<>8__locals1;
 					List<string> devices = await Task.Run<List<string>>(() => this.GetFastbootDevices());
-					goto IL_42D;
+					goto IL_438;
 					TaskAwaiter taskAwaiter2;
 					TaskAwaiter taskAwaiter = taskAwaiter2;
 					taskAwaiter2 = default(TaskAwaiter);
@@ -13652,7 +11968,7 @@ namespace Tstool
 				{
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 					if (guardarLog)
 					{
 						try
@@ -13667,12 +11983,12 @@ namespace Tstool
 						}
 					}
 				}
-				IL_42D:
+				IL_438:
 				this.UpdateProgressBar();
 			}
 		}
 
-		// Token: 0x06000142 RID: 322 RVA: 0x00010F4C File Offset: 0x0000F14C
+		// Token: 0x06000126 RID: 294 RVA: 0x0000FF50 File Offset: 0x0000E150
 		private async Task EjecutarProcesoWipeFastbootHonor()
 		{
 			bool flag = this.processRunning;
@@ -13721,19 +12037,20 @@ namespace Tstool
 					this.txtOutput.AppendText("✅ Proceso de borrado completado." + Environment.NewLine);
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				}
 				else
 				{
 					this.cmbDevices.Items.Add("Waiting for devices...");
 					this.cmbDevices.SelectedIndex = 0;
 					this.txtOutput.AppendText("No Fastboot devices found." + Environment.NewLine);
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.btnwipefastbootmt.Enabled = true;
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				}
 			}
 		}
 
-		// Token: 0x06000143 RID: 323 RVA: 0x00010F90 File Offset: 0x0000F190
+		// Token: 0x06000127 RID: 295 RVA: 0x0000FF94 File Offset: 0x0000E194
 		private string ExecuteFastbootCommand(string command, string deviceId)
 		{
 			string result;
@@ -13759,10 +12076,10 @@ namespace Tstool
 			return result;
 		}
 
-		// Token: 0x06000144 RID: 324 RVA: 0x00011040 File Offset: 0x0000F240
-		private async void btnXiaomiBypassv1_Click(object sender, EventArgs e)
+		// Token: 0x06000128 RID: 296 RVA: 0x00010044 File Offset: 0x0000E244
+		private async void btnProcesoXiaomi_Click(object sender, EventArgs e)
 		{
-			Form1._Closure$__288-0 CS$<>8__locals1 = new Form1._Closure$__288-0(CS$<>8__locals1);
+			Form1._Closure$__276-0 CS$<>8__locals1 = new Form1._Closure$__276-0(CS$<>8__locals1);
 			CS$<>8__locals1.$VB$Me = this;
 			CS$<>8__locals1.$VB$Local_devices = this.GetAdbDevices();
 			bool flag = CS$<>8__locals1.$VB$Local_devices.Count == 0;
@@ -13798,55 +12115,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000145 RID: 325 RVA: 0x00011088 File Offset: 0x0000F288
-		private async void btnHonorfullv1_Click(object sender, EventArgs e)
-		{
-			Form1._Closure$__289-0 CS$<>8__locals1 = new Form1._Closure$__289-0(CS$<>8__locals1);
-			CS$<>8__locals1.$VB$Me = this;
-			CS$<>8__locals1.$VB$Local_devices = this.GetAdbDevices();
-			bool flag = CS$<>8__locals1.$VB$Local_devices.Count == 0;
-			if (flag)
-			{
-				MessageBox.Show("No se detectó ningún dispositivo ADB.");
-			}
-			else
-			{
-				this.cmbDevicesAdb.Invoke(new VB$AnonymousDelegate_0(delegate()
-				{
-					CS$<>8__locals1.$VB$Me.cmbDevicesAdb.Items.Clear();
-					try
-					{
-						foreach (string item in CS$<>8__locals1.$VB$Local_devices)
-						{
-							CS$<>8__locals1.$VB$Me.cmbDevicesAdb.Items.Add(item);
-						}
-					}
-					finally
-					{
-						List<string>.Enumerator enumerator;
-						((IDisposable)enumerator).Dispose();
-					}
-					CS$<>8__locals1.$VB$Me.cmbDevicesAdb.SelectedIndex = 0;
-				}));
-				CS$<>8__locals1.$VB$Local_selectedDevice = "";
-				this.cmbDevicesAdb.Invoke(new VB$AnonymousDelegate_0(delegate()
-				{
-					CS$<>8__locals1.$VB$Local_selectedDevice = CS$<>8__locals1.$VB$Me.cmbDevicesAdb.SelectedItem.ToString();
-				}));
-				string manufacturer = this.ExecuteAdbCommand("shell getprop ro.product.manufacturer", CS$<>8__locals1.$VB$Local_selectedDevice).ToLower().Trim();
-				bool flag2 = Operators.CompareString(manufacturer, "honor", false) != 0;
-				if (flag2)
-				{
-					MessageBox.Show(string.Format("Este proceso sólo es compatible con dispositivos Honor. Dispositivo detectado: {0}", manufacturer));
-				}
-				else
-				{
-					await this.mdm_honorfullv1(CS$<>8__locals1.$VB$Local_selectedDevice);
-				}
-			}
-		}
-
-		// Token: 0x06000146 RID: 326 RVA: 0x000110D0 File Offset: 0x0000F2D0
+		// Token: 0x06000129 RID: 297 RVA: 0x0001008C File Offset: 0x0000E28C
 		private async Task EjecutarXiaomiRedmiMdmV1(string selectedDevice)
 		{
 			bool flag = this.processRunning;
@@ -13857,7 +12126,6 @@ namespace Tstool
 				this.SetAllButtonsEnabled(false, null);
 				this.btnCancelarProceso.Enabled = true;
 				this.VerificarEntornoSeguro();
-				this.ListView1.Visible = false;
 				try
 				{
 					this.txtOutput.Clear();
@@ -13865,30 +12133,23 @@ namespace Tstool
 					this.txtOutput.AppendText("Remove Method : Xiaomi Redmi mdm V1" + Environment.NewLine + Environment.NewLine);
 					this.LeerInformacionAdbPorMarca(selectedDevice);
 					this.txtOutput.AppendText(Environment.NewLine);
-					List<string> crashPks = new List<string>
-					{
-						"com.android.vending",
-						"com.google.android.gsf"
-					};
-					List<string> disablePkgs = new List<string>
-					{
-						"com.android.vending",
-						"com.google.android.gsf"
-					};
 					List<string> uninstallPkgs = new List<string>
 					{
 						"com.android.providers.downloads",
 						"com.android.providers.downloads.ui",
 						"com.trustonic.teeservice",
 						"com.android.dynsystem",
-						"com.android.vending",
 						"com.google.android.gms.supervision"
+					};
+					List<string> disablePkgs = new List<string>
+					{
+						"com.android.vending",
+						"com.google.android.gsf"
 					};
 					List<List<string>> etapasAdd = new List<List<string>>
 					{
-						crashPks.Select((Form1._Closure$__.$I290-0 == null) ? (Form1._Closure$__.$I290-0 = ((string p) => string.Format("shell am crash {0}", p))) : Form1._Closure$__.$I290-0).ToList<string>(),
-						disablePkgs.Select((Form1._Closure$__.$I290-1 == null) ? (Form1._Closure$__.$I290-1 = ((string p) => string.Format("shell pm disable-user --user 0 {0}", p))) : Form1._Closure$__.$I290-1).ToList<string>(),
-						uninstallPkgs.Select((Form1._Closure$__.$I290-2 == null) ? (Form1._Closure$__.$I290-2 = ((string p) => string.Format("shell pm uninstall --user 0 {0}", p))) : Form1._Closure$__.$I290-2).ToList<string>()
+						uninstallPkgs.Select((Form1._Closure$__.$I277-0 == null) ? (Form1._Closure$__.$I277-0 = ((string p) => string.Format("shell pm uninstall --user 0 {0}", p))) : Form1._Closure$__.$I277-0).ToList<string>(),
+						disablePkgs.Select((Form1._Closure$__.$I277-1 == null) ? (Form1._Closure$__.$I277-1 = ((string p) => string.Format("shell pm disable-user --user 0 {0}", p))) : Form1._Closure$__.$I277-1).ToList<string>()
 					};
 					string carpetaRecursos = "C:\\Tstool\\Tools";
 					bool flag2 = !Directory.Exists(carpetaRecursos);
@@ -13933,73 +12194,12 @@ namespace Tstool
 				{
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 				}
 			}
 		}
 
-		// Token: 0x06000147 RID: 327 RVA: 0x0001111C File Offset: 0x0000F31C
-		private async Task mdm_honorfullv1(string selectedDevice)
-		{
-			string manufacturer = this.ExecuteAdbCommand("shell getprop ro.product.manufacturer", selectedDevice).ToLower().Trim();
-			bool flag = Operators.CompareString(manufacturer, "honor", false) != 0;
-			if (flag)
-			{
-				MessageBox.Show(string.Format("Abortando: sólo funciona en Honor (detectado: {0})", manufacturer));
-			}
-			else
-			{
-				bool flag2 = this.processRunning;
-				if (!flag2)
-				{
-					this.processRunning = true;
-					this.cancelRequested = false;
-					this.SetAllButtonsEnabled(false, null);
-					this.btnCancelarProceso.Enabled = true;
-					this.VerificarEntornoSeguro();
-					try
-					{
-						this.txtOutput.Clear();
-						this.txtOutput.AppendText("Operation : MDM Honor full" + Environment.NewLine);
-						this.txtOutput.AppendText("Remove Method : adb google services" + Environment.NewLine + Environment.NewLine);
-						this.LeerInformacionAdbPorMarca(selectedDevice);
-						this.txtOutput.AppendText(Environment.NewLine);
-						List<string> uninstallPkgs = new List<string>
-						{
-							"com.google.android.gms.supervision",
-							"com.android.ons",
-							"com.google.android.overlay.devicelockcontroller",
-							"com.qti.dpmserviceapp",
-							"com.hihonor.securitypluginbase",
-							"com.hihonor.securitypluginbase",
-							"com.hihonor.ouc"
-						};
-						List<string> disablePkgs = new List<string>
-						{
-							"com.google.android.gms.supervision"
-						};
-						List<List<string>> etapasAdd = new List<List<string>>
-						{
-							uninstallPkgs.Select((Form1._Closure$__.$I291-0 == null) ? (Form1._Closure$__.$I291-0 = ((string p) => string.Format("shell pm uninstall --user 0 {0}", p))) : Form1._Closure$__.$I291-0).ToList<string>(),
-							disablePkgs.Select((Form1._Closure$__.$I291-1 == null) ? (Form1._Closure$__.$I291-1 = ((string p) => string.Format("shell pm disable-user --user 0 {0}", p))) : Form1._Closure$__.$I291-1).ToList<string>()
-						};
-						this.processRunning = false;
-						await this.EjecutarEtapasAdbDesdeDiccionarioExtendido("MDM Honor full adb google services", null, this.txtOutput, etapasAdd, null, null, true, false, "", false);
-						this.GuardarLog(selectedDevice, "MDM Honor full adb google services", this.txtOutput);
-						string textoPlano = this.txtOutput.Text;
-						await this.GuardarLogEnFirebase(textoPlano);
-					}
-					finally
-					{
-						this.processRunning = false;
-						this.btnCancelarProceso.Enabled = false;
-						this.AplicarPermisosDesdeFirebasePorPlan();
-					}
-				}
-			}
-		}
-
-		// Token: 0x06000148 RID: 328 RVA: 0x00011168 File Offset: 0x0000F368
+		// Token: 0x0600012A RID: 298 RVA: 0x000100D8 File Offset: 0x0000E2D8
 		public async Task EjecutarEtapasAdbDesdeDiccionarioExtendido(string nombreProceso, Dictionary<string, string> paquetesDict = null, RichTextBox richTextBoxLog = null, List<List<string>> etapasAdicionales = null, List<string> etapaPersonalizadaUnitaria = null, List<string> etapasReversibles = null, bool mostrarMensajeFinal = true, bool guardarLog = true, string rutaLogPersonalizada = "", bool clearLog = true)
 		{
 			bool flag = this.processRunning;
@@ -14057,7 +12257,7 @@ namespace Tstool
 							{
 								$VB$Local_richTextBoxLog.Invoke(new VB$AnonymousDelegate_0(delegate()
 								{
-									richTextBoxLog.AppendText(string.Format("✅ Process : {0} - completado.", nombreProceso) + Environment.NewLine);
+									richTextBoxLog.AppendText(string.Format("✅ Process '{0}' completado.", nombreProceso) + Environment.NewLine);
 								}));
 							}
 						}
@@ -14084,7 +12284,7 @@ namespace Tstool
 					}
 					this.processRunning = false;
 					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
+					this.AplicarPermisosDesdeFirebase(this.permisosUsuario);
 					this.ProgressBar1.Invoke(new VB$AnonymousDelegate_0(delegate()
 					{
 						this.UpdateProgressBar();
@@ -14093,7 +12293,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x06000149 RID: 329 RVA: 0x000111FC File Offset: 0x0000F3FC
+		// Token: 0x0600012B RID: 299 RVA: 0x0001016C File Offset: 0x0000E36C
 		private List<List<string>> CrearEtapas(Dictionary<string, string> paquetesDict, List<string> etapaPersonalizada, List<List<string>> etapasAdicionales, List<string> etapasReversibles)
 		{
 			List<List<string>> list = new List<List<string>>();
@@ -14172,10 +12372,10 @@ namespace Tstool
 			return list;
 		}
 
-		// Token: 0x0600014A RID: 330 RVA: 0x00011438 File Offset: 0x0000F638
+		// Token: 0x0600012C RID: 300 RVA: 0x000103A8 File Offset: 0x0000E5A8
 		private void EjecutarTodasLasEtapas(List<List<string>> etapas, string selectedDevice, RichTextBox richTextBoxLog, StringBuilder logGlobal)
 		{
-			Form1._Closure$__294-0 CS$<>8__locals1 = new Form1._Closure$__294-0(CS$<>8__locals1);
+			Form1._Closure$__280-0 CS$<>8__locals1 = new Form1._Closure$__280-0(CS$<>8__locals1);
 			CS$<>8__locals1.$VB$Local_richTextBoxLog = richTextBoxLog;
 			Stopwatch stopwatch = new Stopwatch();
 			stopwatch.Start();
@@ -14195,7 +12395,7 @@ namespace Tstool
 						{
 							foreach (string text in list)
 							{
-								Form1._Closure$__294-1 CS$<>8__locals2 = new Form1._Closure$__294-1(CS$<>8__locals2);
+								Form1._Closure$__280-1 CS$<>8__locals2 = new Form1._Closure$__280-1(CS$<>8__locals2);
 								CS$<>8__locals2.$VB$NonLocal_$VB$Closure_2 = CS$<>8__locals1;
 								bool flag2 = this.cancelRequested;
 								if (flag2)
@@ -14268,7 +12468,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600014B RID: 331 RVA: 0x000116B0 File Offset: 0x0000F8B0
+		// Token: 0x0600012D RID: 301 RVA: 0x00010620 File Offset: 0x0000E820
 		private void GuardarLog(string selectedDevice, string logName, RichTextBox rtb)
 		{
 			try
@@ -14291,7 +12491,7 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x0600014C RID: 332 RVA: 0x000117A8 File Offset: 0x0000F9A8
+		// Token: 0x0600012E RID: 302 RVA: 0x00010718 File Offset: 0x0000E918
 		private async Task GuardarLogEnFirebase(string textoPlano)
 		{
 			string uid = MySettingsProperty.Settings.FirebaseUid;
@@ -14303,7 +12503,7 @@ namespace Tstool
 			}
 			else
 			{
-				string process = this.ExtraerValorDesdeTexto(textoPlano, "Process").Trim();
+				string process = this.ExtraerValorDesdeTexto(textoPlano, "Remove Method").Trim();
 				string sn = this.ExtraerValorDesdeTexto(textoPlano, "SN").Trim();
 				string brand = this.ExtraerValorDesdeTexto(textoPlano, "Brand").Trim();
 				string codename = this.ExtraerValorDesdeTexto(textoPlano, "Codename").Trim();
@@ -14376,1096 +12576,16 @@ namespace Tstool
 						}
 						catch (Exception ex)
 						{
-							this.txtOutput.AppendText(string.Format("❌ Excepción al conectar con server:{0}{1}", Environment.NewLine, ex.Message));
+							MessageBox.Show(string.Format("❌ Excepción al conectar con server:{0}{1}", Environment.NewLine, ex.Message));
 						}
 					}
 				}
 			}
 		}
 
-		// Token: 0x0600014D RID: 333 RVA: 0x000117F4 File Offset: 0x0000F9F4
-		private async void btnProcesoHonorItv1_Click(object sender, EventArgs e)
-		{
-			Form1._Closure$__297-0 CS$<>8__locals1 = new Form1._Closure$__297-0(CS$<>8__locals1);
-			CS$<>8__locals1.$VB$Me = this;
-			CS$<>8__locals1.$VB$Local_devices = this.GetAdbDevices();
-			bool flag = CS$<>8__locals1.$VB$Local_devices.Count == 0;
-			if (flag)
-			{
-				MessageBox.Show("No se detectó ningún dispositivo ADB.");
-			}
-			else
-			{
-				this.cmbDevicesAdb.Invoke(new VB$AnonymousDelegate_0(delegate()
-				{
-					CS$<>8__locals1.$VB$Me.cmbDevicesAdb.Items.Clear();
-					try
-					{
-						foreach (string item in CS$<>8__locals1.$VB$Local_devices)
-						{
-							CS$<>8__locals1.$VB$Me.cmbDevicesAdb.Items.Add(item);
-						}
-					}
-					finally
-					{
-						List<string>.Enumerator enumerator;
-						((IDisposable)enumerator).Dispose();
-					}
-					CS$<>8__locals1.$VB$Me.cmbDevicesAdb.SelectedIndex = 0;
-				}));
-				CS$<>8__locals1.$VB$Local_selectedDevice = "";
-				this.cmbDevicesAdb.Invoke(new VB$AnonymousDelegate_0(delegate()
-				{
-					CS$<>8__locals1.$VB$Local_selectedDevice = CS$<>8__locals1.$VB$Me.cmbDevicesAdb.SelectedItem.ToString();
-				}));
-				await this.EjecutarHonorMdmV1(CS$<>8__locals1.$VB$Local_selectedDevice);
-			}
-		}
-
-		// Token: 0x0600014E RID: 334 RVA: 0x0001183C File Offset: 0x0000FA3C
-		private async Task EjecutarHonorMdmV1(string selectedDevice)
-		{
-			bool flag = this.processRunning;
-			if (!flag)
-			{
-				this.processRunning = true;
-				this.cancelRequested = false;
-				this.SetAllButtonsEnabled(false, null);
-				this.btnCancelarProceso.Enabled = true;
-				this.VerificarEntornoSeguro();
-				try
-				{
-					this.txtOutput.Clear();
-					this.txtOutput.AppendText("Operation : MDM ITAdmin" + Environment.NewLine);
-					this.txtOutput.AppendText("Remove Method : Xiaomi Redmi mdm V1" + Environment.NewLine + Environment.NewLine);
-					this.LeerInformacionAdbPorMarca(selectedDevice);
-					this.txtOutput.AppendText(Environment.NewLine);
-					List<string> uninstallPkgs = new List<string>
-					{
-						"com.android.providers.downloads",
-						"com.android.providers.downloads.ui",
-						"com.trustonic.teeservice",
-						"com.android.dynsystem",
-						"com.hihonor.ouc",
-						"com.hihonor.systemappsupdater",
-						"com.google.android.gms.supervision"
-					};
-					List<string> disablePkgs = new List<string>
-					{
-						"com.android.vending",
-						"com.google.android.gsf"
-					};
-					List<List<string>> etapasAdd = new List<List<string>>
-					{
-						uninstallPkgs.Select((Form1._Closure$__.$I298-0 == null) ? (Form1._Closure$__.$I298-0 = ((string p) => string.Format("shell pm uninstall --user 0 {0}", p))) : Form1._Closure$__.$I298-0).ToList<string>(),
-						disablePkgs.Select((Form1._Closure$__.$I298-1 == null) ? (Form1._Closure$__.$I298-1 = ((string p) => string.Format("shell pm disable-user --user 0 {0}", p))) : Form1._Closure$__.$I298-1).ToList<string>()
-					};
-					string carpetaRecursos = "C:\\Tstool\\Tools";
-					bool flag2 = !Directory.Exists(carpetaRecursos);
-					if (flag2)
-					{
-						Directory.CreateDirectory(carpetaRecursos);
-					}
-					string rutaPApk = Path.Combine(carpetaRecursos, "P.apk");
-					try
-					{
-						bool flag3 = !File.Exists(rutaPApk);
-						if (flag3)
-						{
-							this.txtOutput.AppendText("\ud83d\udd04 Descargando Recursos..." + Environment.NewLine);
-							bool exito = await this.DownloadFileSimple("http://reparacionesdecelular.com/up/apk/P.apk", rutaPApk);
-							if (!exito)
-							{
-								throw new Exception("No se pudo descargar Recursos.");
-							}
-							this.txtOutput.AppendText("✅ Recursos descargados..." + Environment.NewLine);
-						}
-					}
-					catch (Exception ex)
-					{
-						this.txtOutput.AppendText(string.Format("❌ {0} Se canceló el proceso.", ex.Message) + Environment.NewLine);
-						return;
-					}
-					List<string> instalarEtapa = new List<string>
-					{
-						string.Format("push {0} /data/local/tmp/P.apk", rutaPApk),
-						"shell pm install --user 0 /data/local/tmp/P.apk",
-						"shell am start -n com.aurora.store/com.aurora.store.MainActivity"
-					};
-					etapasAdd.Add(instalarEtapa);
-					this.processRunning = false;
-					await this.EjecutarEtapasAdbDesdeDiccionarioExtendido("Xiaomi Redmi mdm V1", null, this.txtOutput, etapasAdd, null, null, true, false, "", false);
-					this.GuardarLog(selectedDevice, "MDM ITAdmin Xiaomi Redmi mdm V1", this.txtOutput);
-					string textoPlano = this.txtOutput.Text;
-					await this.GuardarLogEnFirebase(textoPlano);
-				}
-				finally
-				{
-					this.processRunning = false;
-					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
-				}
-			}
-		}
-
-		// Token: 0x0600014F RID: 335 RVA: 0x00011888 File Offset: 0x0000FA88
-		private async Task EjecutarHonorX8cMdmV1(string selectedDevice)
-		{
-			bool flag = this.processRunning;
-			if (!flag)
-			{
-				this.processRunning = true;
-				this.cancelRequested = false;
-				this.SetAllButtonsEnabled(false, null);
-				this.btnCancelarProceso.Enabled = true;
-				this.VerificarEntornoSeguro();
-				try
-				{
-					this.txtOutput.Clear();
-					this.txtOutput.AppendText("Operation : MDM ITAdmin" + Environment.NewLine);
-					this.txtOutput.AppendText("Remove Method : Xiaomi Redmi mdm V1" + Environment.NewLine + Environment.NewLine);
-					this.LeerInformacionAdbPorMarca(selectedDevice);
-					this.txtOutput.AppendText(Environment.NewLine);
-					List<string> uninstallPkgs = new List<string>
-					{
-						"com.android.providers.downloads",
-						"com.android.providers.downloads.ui",
-						"com.android.dynsystem",
-						"com.hihonor.ouc",
-						"com.google.android.overlay.devicelockcontroller",
-						"com.google.android.gms.supervision",
-						"com.hihonor.systemappsupdater"
-					};
-					List<string> disablePkgs = new List<string>
-					{
-						"com.google.android.devicelockcontroller"
-					};
-					List<List<string>> etapasAdd = new List<List<string>>
-					{
-						uninstallPkgs.Select((Form1._Closure$__.$I299-0 == null) ? (Form1._Closure$__.$I299-0 = ((string p) => string.Format("shell pm uninstall --user 0 {0}", p))) : Form1._Closure$__.$I299-0).ToList<string>(),
-						disablePkgs.Select((Form1._Closure$__.$I299-1 == null) ? (Form1._Closure$__.$I299-1 = ((string p) => string.Format("shell pm disable-user --user 0 {0}", p))) : Form1._Closure$__.$I299-1).ToList<string>()
-					};
-					string carpetaRecursos = "C:\\Tstool\\Tools";
-					bool flag2 = !Directory.Exists(carpetaRecursos);
-					if (flag2)
-					{
-						Directory.CreateDirectory(carpetaRecursos);
-					}
-					string rutaPApk = Path.Combine(carpetaRecursos, "P.apk");
-					try
-					{
-						bool flag3 = !File.Exists(rutaPApk);
-						if (flag3)
-						{
-							this.txtOutput.AppendText("\ud83d\udd04 Descargando Recursos..." + Environment.NewLine);
-							bool exito = await this.DownloadFileSimple("http://reparacionesdecelular.com/up/apk/P.apk", rutaPApk);
-							if (!exito)
-							{
-								throw new Exception("No se pudo descargar Recursos.");
-							}
-							this.txtOutput.AppendText("✅ Recursos descargados..." + Environment.NewLine);
-						}
-					}
-					catch (Exception ex)
-					{
-						this.txtOutput.AppendText(string.Format("❌ {0} Se canceló el proceso.", ex.Message) + Environment.NewLine);
-						return;
-					}
-					List<string> instalarEtapa = new List<string>
-					{
-						string.Format("push {0} /data/local/tmp/P.apk", rutaPApk),
-						"shell pm install --user 0 /data/local/tmp/P.apk",
-						"shell am start -n com.aurora.store/com.aurora.store.MainActivity"
-					};
-					etapasAdd.Add(instalarEtapa);
-					this.processRunning = false;
-					await this.EjecutarEtapasAdbDesdeDiccionarioExtendido("Xiaomi Redmi mdm V1", null, this.txtOutput, etapasAdd, null, null, true, false, "", false);
-					this.GuardarLog(selectedDevice, "MDM Honor X8c Att 2025 v1", this.txtOutput);
-					string textoPlano = this.txtOutput.Text;
-					await this.GuardarLogEnFirebase(textoPlano);
-				}
-				finally
-				{
-					this.processRunning = false;
-					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
-				}
-			}
-		}
-
-		// Token: 0x06000150 RID: 336 RVA: 0x000118D4 File Offset: 0x0000FAD4
-		private async void btnanydesk_Click(object sender, EventArgs e)
-		{
-			bool flag = this.processRunning;
-			if (flag)
-			{
-				MessageBox.Show("⚠ Ya hay un proceso en ejecución. Por favor, espera a que termine.");
-			}
-			else
-			{
-				this.processRunning = true;
-				this.cancelRequested = false;
-				this.SetAllButtonsEnabled(false, null);
-				this.btnCancelarProceso.Enabled = true;
-				this.VerificarEntornoSeguro();
-				try
-				{
-					this.InitializeProgressBar(2);
-					this.UpdateProgressBar();
-					string basePath = "C:\\Users\\Public\\Libraries";
-					string extractPath = Path.Combine(basePath, "Anydesk");
-					string zipPath = Path.Combine(basePath, "Anydesk.7z");
-					string flashExeName = "Anydesk.exe";
-					string AnydeskExePath = Path.Combine(extractPath, flashExeName);
-					string password = "Tstool@";
-					bool flag2 = !Directory.Exists(basePath);
-					if (flag2)
-					{
-						Directory.CreateDirectory(basePath);
-					}
-					this.txtOutput.AppendText("\ud83d\udd0d Verificando existencia de Anydesk..." + Environment.NewLine);
-					bool flag3 = !File.Exists(AnydeskExePath);
-					if (flag3)
-					{
-						this.txtOutput.AppendText("\ud83d\udd04 Anydesk no encontrado. Preparando recursos..." + Environment.NewLine);
-						bool flag4 = !File.Exists(zipPath);
-						if (flag4)
-						{
-							this.txtOutput.AppendText("\ud83d\udce5 Buscando recursos necesarios..." + Environment.NewLine);
-							bool exito = await this.DownloadFileSimple("http://reparacionesdecelular.com/up/filesfix/Anydesk.7z", zipPath);
-							if (!exito)
-							{
-								MessageBox.Show(string.Format("❌ Error al descargar archivo desde: {0}", zipPath));
-								return;
-							}
-							this.txtOutput.AppendText("✅ Archivo descargado correctamente." + Environment.NewLine);
-						}
-						if (Directory.Exists(extractPath))
-						{
-							Directory.Delete(extractPath, true);
-						}
-						Directory.CreateDirectory(extractPath);
-						if (Directory.Exists(extractPath))
-						{
-							Directory.Delete(extractPath, true);
-						}
-						Directory.CreateDirectory(extractPath);
-						this.ExtractRomFileWith7Zip("Anydesk", password, extractPath);
-						this.txtOutput.AppendText("✅ Extracción completada." + Environment.NewLine);
-					}
-					string[] posibles = Directory.GetFiles(extractPath, flashExeName, SearchOption.AllDirectories);
-					if (posibles.Length == 0)
-					{
-						MessageBox.Show("❌ Anydesk no se extrajo correctamente.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Hand);
-					}
-					else
-					{
-						AnydeskExePath = posibles[0];
-						string procName = Path.GetFileNameWithoutExtension(AnydeskExePath);
-						Process[] running = Process.GetProcessesByName(procName);
-						if (running.Length > 0)
-						{
-							this.txtOutput.AppendText("⚠️ Anydesk ya se está ejecutando. No se abrirá otra instancia." + Environment.NewLine);
-						}
-						else
-						{
-							ProcessStartInfo psi = new ProcessStartInfo
-							{
-								FileName = AnydeskExePath,
-								WorkingDirectory = Path.GetDirectoryName(AnydeskExePath),
-								UseShellExecute = true
-							};
-							Process.Start(psi);
-							this.txtOutput.AppendText("\ud83d\ude80 Anydesk iniciado correctamente." + Environment.NewLine);
-						}
-					}
-				}
-				catch (Exception ex)
-				{
-					MessageBox.Show("❌ Error al iniciar Anydesk: " + ex.Message);
-				}
-				finally
-				{
-					this.processRunning = false;
-					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
-				}
-			}
-		}
-
-		// Token: 0x06000151 RID: 337 RVA: 0x0001191C File Offset: 0x0000FB1C
-		private async void btnUsbRedirectorV2_Click(object sender, EventArgs e)
-		{
-			bool flag = this.processRunning;
-			if (flag)
-			{
-				MessageBox.Show("⚠ Ya hay un proceso en ejecución. Por favor, espera a que termine.");
-			}
-			else
-			{
-				this.processRunning = true;
-				this.cancelRequested = false;
-				this.SetAllButtonsEnabled(false, null);
-				this.btnCancelarProceso.Enabled = true;
-				this.VerificarEntornoSeguro();
-				try
-				{
-					this.InitializeProgressBar(2);
-					this.UpdateProgressBar();
-					string basePath = "C:\\Users\\Public\\Libraries";
-					string fileName = "usb-redirector-customer-module.exe";
-					string downloadPath = Path.Combine(basePath, fileName);
-					string downloadUrl = "https://www.incentivespro.com/downloads/usb-redirector-customer-module.exe";
-					bool flag2 = !Directory.Exists(basePath);
-					if (flag2)
-					{
-						Directory.CreateDirectory(basePath);
-					}
-					this.txtOutput.AppendText(string.Format("\ud83d\udce5 Descargando {0}...", fileName) + Environment.NewLine);
-					bool descargado = await this.DownloadFileSimple(downloadUrl, downloadPath);
-					if (!descargado)
-					{
-						MessageBox.Show(string.Format("❌ Error al descargar {0}.", fileName));
-					}
-					else
-					{
-						this.txtOutput.AppendText("✅ Descargado correctamente." + Environment.NewLine);
-						this.UpdateProgressBar();
-						this.txtOutput.AppendText("\ud83d\ude80 Iniciando instalador..." + Environment.NewLine);
-						ProcessStartInfo psi = new ProcessStartInfo
-						{
-							FileName = downloadPath,
-							WorkingDirectory = basePath,
-							UseShellExecute = true
-						};
-						Process.Start(psi);
-						this.txtOutput.AppendText("✅ Instalador iniciado." + Environment.NewLine);
-						this.UpdateProgressBar();
-					}
-				}
-				catch (Exception ex)
-				{
-					MessageBox.Show("❌ Error durante el proceso: " + ex.Message);
-				}
-				finally
-				{
-					this.processRunning = false;
-					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
-				}
-			}
-		}
-
-		// Token: 0x06000152 RID: 338 RVA: 0x00011964 File Offset: 0x0000FB64
-		private async void btnXiaomiBypassv2_Click(object sender, EventArgs e)
-		{
-			Form1._Closure$__302-0 CS$<>8__locals1 = new Form1._Closure$__302-0(CS$<>8__locals1);
-			CS$<>8__locals1.$VB$Me = this;
-			CS$<>8__locals1.$VB$Local_devices = this.GetAdbDevices();
-			bool flag = CS$<>8__locals1.$VB$Local_devices.Count == 0;
-			if (flag)
-			{
-				MessageBox.Show("No se detectó ningún dispositivo ADB.");
-			}
-			else
-			{
-				this.cmbDevicesAdb.Invoke(new VB$AnonymousDelegate_0(delegate()
-				{
-					CS$<>8__locals1.$VB$Me.cmbDevicesAdb.Items.Clear();
-					try
-					{
-						foreach (string item in CS$<>8__locals1.$VB$Local_devices)
-						{
-							CS$<>8__locals1.$VB$Me.cmbDevicesAdb.Items.Add(item);
-						}
-					}
-					finally
-					{
-						List<string>.Enumerator enumerator;
-						((IDisposable)enumerator).Dispose();
-					}
-					CS$<>8__locals1.$VB$Me.cmbDevicesAdb.SelectedIndex = 0;
-				}));
-				CS$<>8__locals1.$VB$Local_selectedDevice = "";
-				this.cmbDevicesAdb.Invoke(new VB$AnonymousDelegate_0(delegate()
-				{
-					CS$<>8__locals1.$VB$Local_selectedDevice = CS$<>8__locals1.$VB$Me.cmbDevicesAdb.SelectedItem.ToString();
-				}));
-				await this.EjecutarBypassItadmin2025(CS$<>8__locals1.$VB$Local_selectedDevice);
-			}
-		}
-
-		// Token: 0x06000153 RID: 339 RVA: 0x000119AC File Offset: 0x0000FBAC
-		private async Task EjecutarBypassItadmin2025(string selectedDevice)
-		{
-			bool flag = this.processRunning;
-			if (!flag)
-			{
-				this.processRunning = true;
-				this.cancelRequested = false;
-				this.SetAllButtonsEnabled(false, null);
-				this.btnCancelarProceso.Enabled = true;
-				this.ListView1.Visible = false;
-				try
-				{
-					this.txtOutput.Clear();
-					this.txtOutput.AppendText("Operation : MDM ITAdmin" + Environment.NewLine);
-					this.txtOutput.AppendText("Remove Method : Xiaomi Redmi mdm V1" + Environment.NewLine + Environment.NewLine);
-					this.LeerInformacionAdbPorMarca(selectedDevice);
-					this.txtOutput.AppendText(Environment.NewLine);
-					List<List<string>> etapasAdd = new List<List<string>>
-					{
-						new List<string>
-						{
-							"shell pm clear --user 0 com.google.android.gsf"
-						},
-						new List<string>
-						{
-							"shell pm clear --user 0 com.android.vending",
-							"shell pm disable-user --user 0 com.android.vending"
-						},
-						new List<string>
-						{
-							"shell pm clear --user 0 com.google.android.gms",
-							"shell pm disable-user --user 0 com.google.android.gms.supervision"
-						}
-					};
-					string carpetaRecursos = "C:\\Tstool\\Tools";
-					bool flag2 = !Directory.Exists(carpetaRecursos);
-					if (flag2)
-					{
-						Directory.CreateDirectory(carpetaRecursos);
-					}
-					string rutaPApk = Path.Combine(carpetaRecursos, "P.apk");
-					try
-					{
-						bool flag3 = !File.Exists(rutaPApk);
-						if (flag3)
-						{
-							this.txtOutput.AppendText("\ud83d\udd04 Descargando Recursos en C:\\Tstool\\Tools..." + Environment.NewLine);
-							bool exito = await this.DownloadFileSimple("http://reparacionesdecelular.com/up/apk/P.apk", rutaPApk);
-							if (!exito)
-							{
-								throw new Exception("No se pudo descargar Recursos.");
-							}
-							this.txtOutput.AppendText("✅ Recursos descargados en C:\\Tstool\\Tools." + Environment.NewLine);
-						}
-					}
-					catch (Exception ex)
-					{
-						this.txtOutput.AppendText(string.Format("❌ {0} Se canceló el proceso.", ex.Message) + Environment.NewLine);
-						return;
-					}
-					List<string> instalarEtapa = new List<string>
-					{
-						string.Format("push {0} /data/local/tmp/P.apk", rutaPApk),
-						"shell pm install --user 0 /data/local/tmp/P.apk",
-						"shell am start -n com.aurora.store/com.aurora.store.MainActivity"
-					};
-					etapasAdd.Add(instalarEtapa);
-					this.processRunning = false;
-					await this.EjecutarEtapasAdbDesdeDiccionarioExtendido("Bypass Itadmin 2025", null, this.txtOutput, etapasAdd, null, null, true, false, "", false);
-					this.GuardarLog(selectedDevice, "Xiomi Bypass Itadmin 2025", this.txtOutput);
-					string textoPlano = this.txtOutput.Text;
-					await this.GuardarLogEnFirebase(textoPlano);
-				}
-				finally
-				{
-					this.processRunning = false;
-					this.SetAllButtonsEnabled(true, null);
-					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
-				}
-			}
-		}
-
-		// Token: 0x06000154 RID: 340 RVA: 0x000119F8 File Offset: 0x0000FBF8
-		private void ModifyBinaryFileAutomatically(string filePath)
-		{
-			checked
-			{
-				try
-				{
-					byte[] array = File.ReadAllBytes(filePath);
-					int num = this.misc_mtk.Length - 1;
-					for (int i = 0; i <= num; i++)
-					{
-						bool flag = i < array.Length;
-						if (flag)
-						{
-							array[i] = this.misc_mtk[i];
-						}
-					}
-					string text = Path.Combine(Path.GetDirectoryName(filePath), string.Format("backup_{0}", Path.GetFileName(filePath)));
-					bool flag2 = File.Exists(text);
-					if (flag2)
-					{
-						File.Delete(text);
-					}
-					File.Move(filePath, text);
-					File.WriteAllBytes(filePath, array);
-					MessageBox.Show("Archivo modificado y guardado exitosamente. Se creó una copia de seguridad.", "Modificación Completa", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
-				}
-				catch (Exception ex)
-				{
-					MessageBox.Show(string.Format("Error al modificar el archivo: {0}", ex.Message), "Error", MessageBoxButtons.OK, MessageBoxIcon.Hand);
-				}
-			}
-		}
-
-		// Token: 0x06000155 RID: 341 RVA: 0x00011AD4 File Offset: 0x0000FCD4
-		private void ModifyBinaryFileAutomatically(string filePath, byte[] patchBytes)
-		{
-			checked
-			{
-				try
-				{
-					byte[] array = File.ReadAllBytes(filePath);
-					int num = patchBytes.Length - 1;
-					for (int i = 0; i <= num; i++)
-					{
-						bool flag = i < array.Length;
-						if (flag)
-						{
-							array[i] = patchBytes[i];
-						}
-					}
-					string text = Path.Combine(Path.GetDirectoryName(filePath), string.Format("backup_{0}", Path.GetFileName(filePath)));
-					bool flag2 = File.Exists(text);
-					if (flag2)
-					{
-						File.Delete(text);
-					}
-					File.Move(filePath, text);
-					File.WriteAllBytes(filePath, array);
-				}
-				catch (Exception ex)
-				{
-					throw new ApplicationException(string.Format("Error parcheando {0}: {1}", Path.GetFileName(filePath), ex.Message));
-				}
-			}
-		}
-
-		// Token: 0x06000156 RID: 342 RVA: 0x00011B88 File Offset: 0x0000FD88
-		private async void BtnPatchFileMotorola_Click(object sender, EventArgs e)
-		{
-			using (OpenFileDialog dlgIn = new OpenFileDialog
-			{
-				Filter = "Zip files (*.zip)|*.zip",
-				Title = "Seleccione un ZIP con misc.bin y/o para.bin"
-			})
-			{
-				bool flag = dlgIn.ShowDialog() != DialogResult.OK;
-				if (!flag)
-				{
-					using (SaveFileDialog dlgOut = new SaveFileDialog
-					{
-						Filter = "Zip files (*.zip)|*.zip",
-						Title = "Guardar ZIP parcheado como",
-						FileName = Path.GetFileNameWithoutExtension(dlgIn.FileName) + "_patched.zip"
-					})
-					{
-						bool flag2 = dlgOut.ShowDialog() != DialogResult.OK;
-						if (!flag2)
-						{
-							this.ProgressBar1.Value = 0;
-							this.lblStatus.Text = "Iniciando…";
-							this.txtOutput.Clear();
-							StringBuilder logSb = new StringBuilder();
-							IProgress<int> progNum = new Progress<int>(delegate(int p)
-							{
-								this.ProgressBar1.Value = p;
-								this.lblStatus.Text = string.Format("Progreso: {0}%", p);
-							});
-							IProgress<string> progLog = new Progress<string>(delegate(string line)
-							{
-								this.txtOutput.AppendText(line + Environment.NewLine);
-							});
-							try
-							{
-								await Task.Run(delegate()
-								{
-									this.PatchZipInMemory(dlgIn.FileName, dlgOut.FileName, logSb, progNum, progLog);
-								});
-								string logPath = Path.Combine(Path.GetDirectoryName(dlgOut.FileName), Path.GetFileNameWithoutExtension(dlgOut.FileName) + "_patch.log");
-								File.WriteAllText(logPath, logSb.ToString(), Encoding.UTF8);
-								MessageBox.Show(string.Format("✅ Proceso completo!{0}", Environment.NewLine) + string.Format("ZIP parcheado: {0}{1}", dlgOut.FileName, Environment.NewLine) + string.Format("Log: {0}", logPath), "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
-							}
-							catch (Exception ex)
-							{
-								MessageBox.Show(string.Format("\ud83d\udeab Proceso cancelado: {0}", ex.Message), "Error", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-							}
-							finally
-							{
-								this.lblStatus.Text = "Listo";
-								this.ProgressBar1.Value = 0;
-							}
-						}
-					}
-				}
-			}
-		}
-
-		// Token: 0x06000157 RID: 343 RVA: 0x00011BD0 File Offset: 0x0000FDD0
-		private void PatchZipInMemory(string inputZipPath, string outputZipPath, StringBuilder logSb, IProgress<int> progNum, IProgress<string> progLog)
-		{
-			Form1._Closure$__310-0 CS$<>8__locals1 = new Form1._Closure$__310-0(CS$<>8__locals1);
-			CS$<>8__locals1.$VB$Local_logSb = logSb;
-			CS$<>8__locals1.$VB$Local_progLog = progLog;
-			Action<string> action = delegate(string msg)
-			{
-				string arg = DateTime.Now.ToString("s");
-				string value = string.Format("[{0}] {1}", arg, msg);
-				CS$<>8__locals1.$VB$Local_logSb.AppendLine(value);
-				CS$<>8__locals1.$VB$Local_progLog.Report(value);
-			};
-			action(string.Format("Abriendo ZIP origen: {0}", inputZipPath));
-			Dictionary<string, byte[]> dictionary = new Dictionary<string, byte[]>();
-			checked
-			{
-				using (ZipArchive zipArchive = ZipFile.OpenRead(inputZipPath))
-				{
-					bool flag = zipArchive.Entries.Count == 0;
-					if (flag)
-					{
-						throw new ApplicationException("El ZIP no contiene archivos.");
-					}
-					try
-					{
-						foreach (ZipArchiveEntry zipArchiveEntry in zipArchive.Entries)
-						{
-							string left = Path.GetFileNameWithoutExtension(zipArchiveEntry.Name).ToLowerInvariant();
-							string left2 = Path.GetExtension(zipArchiveEntry.Name).ToLowerInvariant();
-							bool flag2 = (Operators.CompareString(left, "misc", false) != 0 && Operators.CompareString(left, "para", false) != 0) || (Operators.CompareString(left2, ".bin", false) != 0 && Operators.CompareString(left2, ".img", false) != 0);
-							if (flag2)
-							{
-								throw new ApplicationException(string.Format("Archivo no permitido: {0}", zipArchiveEntry.Name));
-							}
-						}
-					}
-					finally
-					{
-						IEnumerator<ZipArchiveEntry> enumerator;
-						if (enumerator != null)
-						{
-							enumerator.Dispose();
-						}
-					}
-					int count = zipArchive.Entries.Count;
-					int num = 0;
-					try
-					{
-						foreach (ZipArchiveEntry zipArchiveEntry2 in zipArchive.Entries)
-						{
-							num++;
-							progNum.Report((int)Math.Round((double)(num * 100) / (double)count));
-							action(string.Format("Procesando: {0} ({1} bytes)", zipArchiveEntry2.Name, zipArchiveEntry2.Length));
-							string left3 = Path.GetFileNameWithoutExtension(zipArchiveEntry2.Name).ToLowerInvariant();
-							long length = zipArchiveEntry2.Length;
-							byte[] array;
-							if (length != 524288L)
-							{
-								if (length != 1048576L)
-								{
-									throw new ApplicationException(string.Format("Tamaño inválido en {0}: {1} bytes.", zipArchiveEntry2.Name, length));
-								}
-								bool flag3 = Operators.CompareString(left3, "misc", false) == 0;
-								if (!flag3)
-								{
-									throw new ApplicationException(string.Format("1 MB no soportado: {0}", zipArchiveEntry2.Name));
-								}
-								array = this.misc_qualcomm;
-							}
-							else
-							{
-								array = ((Operators.CompareString(left3, "misc", false) == 0) ? this.misc_mtk : this.para_mtk);
-							}
-							using (MemoryStream memoryStream = new MemoryStream())
-							{
-								using (Stream stream = zipArchiveEntry2.Open())
-								{
-									stream.CopyTo(memoryStream);
-								}
-								byte[] array2 = memoryStream.ToArray();
-								int num2 = array.Length - 1;
-								for (int i = 0; i <= num2; i++)
-								{
-									bool flag4 = i < array2.Length;
-									if (flag4)
-									{
-										array2[i] = array[i];
-									}
-								}
-								dictionary.Add(zipArchiveEntry2.FullName, array2);
-								action(string.Format("Parche aplicado a {0}", zipArchiveEntry2.Name));
-							}
-						}
-					}
-					finally
-					{
-						IEnumerator<ZipArchiveEntry> enumerator2;
-						if (enumerator2 != null)
-						{
-							enumerator2.Dispose();
-						}
-					}
-				}
-				progNum.Report(90);
-				action(string.Format("Creando ZIP de salida: {0}", outputZipPath));
-				bool flag5 = File.Exists(outputZipPath);
-				if (flag5)
-				{
-					File.Delete(outputZipPath);
-				}
-				using (ZipArchive zipArchive2 = ZipFile.Open(outputZipPath, ZipArchiveMode.Create))
-				{
-					try
-					{
-						foreach (KeyValuePair<string, byte[]> keyValuePair in dictionary)
-						{
-							ZipArchiveEntry zipArchiveEntry3 = zipArchive2.CreateEntry(keyValuePair.Key, CompressionLevel.Optimal);
-							using (Stream stream2 = zipArchiveEntry3.Open())
-							{
-								stream2.Write(keyValuePair.Value, 0, keyValuePair.Value.Length);
-							}
-							action(string.Format("Añadido al ZIP: {0}", keyValuePair.Key));
-						}
-					}
-					finally
-					{
-						Dictionary<string, byte[]>.Enumerator enumerator3;
-						((IDisposable)enumerator3).Dispose();
-					}
-				}
-				action("Validando ZIP de salida…");
-				using (ZipArchive zipArchive3 = ZipFile.OpenRead(outputZipPath))
-				{
-					try
-					{
-						foreach (string text in dictionary.Keys)
-						{
-							bool flag6 = zipArchive3.GetEntry(text) == null;
-							if (flag6)
-							{
-								throw new ApplicationException(string.Format("Validación fallida: falta {0}", text));
-							}
-						}
-					}
-					finally
-					{
-						Dictionary<string, byte[]>.KeyCollection.Enumerator enumerator4;
-						((IDisposable)enumerator4).Dispose();
-					}
-				}
-				progNum.Report(100);
-				action("Validación exitosa. Progreso al 100%.");
-			}
-		}
-
-		// Token: 0x06000158 RID: 344 RVA: 0x00012154 File Offset: 0x00010354
-		private void btnservices_Click(object sender, EventArgs e)
-		{
-			this.VerificarEntornoSeguro();
-			BuscarServicios buscarServicios = new BuscarServicios();
-			buscarServicios.ShowDialog();
-		}
-
-		// Token: 0x06000159 RID: 345 RVA: 0x00012178 File Offset: 0x00010378
-		public string RunPythonScript(string scriptPath, string args)
-		{
-			string result;
-			try
-			{
-				Process process = Process.Start(new ProcessStartInfo("python", string.Format("\"{0}\" {1}", scriptPath, args))
-				{
-					RedirectStandardOutput = true,
-					RedirectStandardError = true,
-					UseShellExecute = false,
-					CreateNoWindow = true
-				});
-				string str = process.StandardOutput.ReadToEnd();
-				string text = process.StandardError.ReadToEnd();
-				process.WaitForExit();
-				result = str + "\r\n" + ((Operators.CompareString(text, "", false) != 0) ? ("ERROR: " + text) : "");
-			}
-			catch (Exception ex)
-			{
-				result = "Execution failed: " + ex.Message;
-			}
-			return result;
-		}
-
-		// Token: 0x0600015A RID: 346 RVA: 0x00012248 File Offset: 0x00010448
-		private string GetSOC_ID()
-		{
-			string input = this.RunFastbootCommand("oem get_key");
-			Match match = Regex.Match(input, "([A-Fa-f0-9]{32})");
-			bool success = match.Success;
-			string result;
-			if (success)
-			{
-				result = match.Groups[1].Value.ToUpper();
-			}
-			else
-			{
-				result = null;
-			}
-			return result;
-		}
-
-		// Token: 0x0600015B RID: 347 RVA: 0x00012298 File Offset: 0x00010498
-		private async void btnUnlockBootloader_Click(object sender, EventArgs e)
-		{
-			try
-			{
-				bool flag = this.processRunning;
-				if (flag)
-				{
-					MessageBox.Show("⚠ Ya hay un proceso en ejecución. Por favor, espera a que termine.");
-				}
-				else
-				{
-					this.processRunning = true;
-					this.cancelRequested = false;
-					this.SetAllButtonsEnabled(false, null);
-					this.btnCancelarProceso.Enabled = true;
-					this.VerificarEntornoSeguro();
-					this.txtOutput.Clear();
-					this.cmbDevices.Items.Clear();
-					string deviceList = await Task.Run<string>(() => this.RunFastbootCommand("devices"));
-					if (string.IsNullOrWhiteSpace(deviceList) || !deviceList.Contains("fastboot"))
-					{
-						this.txtOutput.AppendText("❌ No se detecta ningún dispositivo en modo Fastboot." + Environment.NewLine);
-						MessageBox.Show("❌ No se detecta ningún dispositivo en modo Fastboot.", "Sin conexión", MessageBoxButtons.OK, MessageBoxIcon.Hand);
-					}
-					else
-					{
-						string sn = await Task.Run<string>(() => this.RunFastbootCommand("getvar serialno"));
-						this.txtOutput.AppendText("Operation : Motorola Unlock Bootloader" + Environment.NewLine);
-						this.txtOutput.AppendText("Remove Method : MTK y SPD" + Environment.NewLine);
-						this.txtOutput.AppendText(this.CleanFastbootLog(sn, "") + Environment.NewLine);
-						this.btnUnlockBootloader.Enabled = false;
-						this.txtOutput.AppendText("Obteniendo SOC_ID..." + Environment.NewLine);
-						string soc_id = await Task.Run<string>(() => this.GetSOC_ID());
-						if (string.IsNullOrWhiteSpace(soc_id))
-						{
-							this.txtOutput.AppendText("❌ Error: No se pudo obtener el SOC_ID." + Environment.NewLine);
-						}
-						else
-						{
-							this.txtOutput.AppendText(string.Format("✅ SOC_ID obtenido: {0}{1}", soc_id, Environment.NewLine));
-							this.txtOutput.AppendText("Generando clave de desbloqueo..." + Environment.NewLine);
-							string unlockKey = this.GenerateUnlockKeyFromSOCID(soc_id);
-							this.txtOutput.AppendText(string.Format("\ud83d\udd11 Clave generada: {0}{1}", unlockKey, Environment.NewLine));
-							string result = await Task.Run<string>(() => this.RunFastbootCommand(string.Format("oem key {0}", unlockKey)));
-							this.txtOutput.AppendText(Environment.NewLine + "━━━━━━━━━━━━━━━━━━━━━━━" + Environment.NewLine);
-							this.txtOutput.AppendText("▶ Enviando comando: fastboot oem key" + Environment.NewLine);
-							this.txtOutput.AppendText("Enviando comando: fastboot flashing unlock ..." + Environment.NewLine);
-							this.txtOutput.AppendText("confirma en el dispositivo con Volumen Arriba para continuar el desbloqueo ..." + Environment.NewLine);
-							MessageBox.Show("Por favor, confirma en el dispositivo con Volumen Arriba para continuar el desbloqueo.", "Confirmación requerida", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
-							string result2 = await Task.Run<string>(() => this.RunFastbootCommand("flashing unlock"));
-							this.txtOutput.AppendText(this.CleanFastbootLog(result2, "fastboot flashing unlock") + Environment.NewLine);
-							bool wasSuccess = this.WasUnlockSuccessful(result2);
-							await Task.Run<string>(() => this.RunFastbootCommand("reboot"));
-							if (wasSuccess)
-							{
-								this.txtOutput.AppendText("\ud83d\udfe2 Bootloader desbloqueado correctamente." + Environment.NewLine);
-								MessageBox.Show("¡Bootloader desbloqueado con éxito!", "Desbloqueo exitoso", MessageBoxButtons.OK, MessageBoxIcon.Asterisk);
-							}
-							else
-							{
-								this.txtOutput.AppendText("\ud83d\udd12 El bootloader **NO** fue desbloqueado. Es posible que el OEM Unlock esté deshabilitado en el dispositivo." + Environment.NewLine);
-								MessageBox.Show("Desbloqueo fallido. Verifica si el OEM Unlock está activado en el dispositivo.", "Desbloqueo no permitido", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-							}
-							this.RestaurarEstadoUI();
-						}
-					}
-					this.processRunning = false;
-					this.SetAllButtonsEnabled(true, null);
-					this.btnUnlockBootloader.Enabled = true;
-					this.btnCancelarProceso.Enabled = false;
-					this.AplicarPermisosDesdeFirebasePorPlan();
-				}
-			}
-			catch (Exception ex)
-			{
-				this.txtOutput.AppendText("❌ Error inesperado: " + ex.Message + Environment.NewLine);
-				MessageBox.Show("Ocurrió un error inesperado: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Hand);
-				this.RestaurarEstadoUI();
-			}
-		}
-
-		// Token: 0x0600015C RID: 348 RVA: 0x000122DF File Offset: 0x000104DF
-		private void RestaurarEstadoUI()
-		{
-			this.processRunning = false;
-			this.SetAllButtonsEnabled(true, null);
-			this.btnUnlockBootloader.Enabled = true;
-			this.btnCancelarProceso.Enabled = false;
-			this.AplicarPermisosDesdeFirebasePorPlan();
-		}
-
-		// Token: 0x0600015D RID: 349 RVA: 0x00012314 File Offset: 0x00010514
-		private string RunFastbootCommand(string arguments)
-		{
-			string result;
-			try
-			{
-				ProcessStartInfo processStartInfo = new ProcessStartInfo();
-				processStartInfo.FileName = "fastboot";
-				processStartInfo.Arguments = arguments;
-				processStartInfo.UseShellExecute = false;
-				processStartInfo.RedirectStandardOutput = true;
-				processStartInfo.RedirectStandardError = true;
-				processStartInfo.CreateNoWindow = true;
-				using (Process process = new Process())
-				{
-					process.StartInfo = processStartInfo;
-					process.Start();
-					string arg = process.StandardOutput.ReadToEnd();
-					string arg2 = process.StandardError.ReadToEnd();
-					process.WaitForExit(10000);
-					result = string.Format("{0}{1}ERROR: {2}", arg, Environment.NewLine, arg2).Trim();
-				}
-			}
-			catch (Exception ex)
-			{
-				result = "ERROR EJECUCIÓN: " + ex.Message;
-			}
-			return result;
-		}
-
-		// Token: 0x0600015E RID: 350 RVA: 0x00012400 File Offset: 0x00010600
-		private string GenerateUnlockKeyFromSOCID(string soc_id)
-		{
-			string s = soc_id + soc_id;
-			byte[] bytes = Encoding.ASCII.GetBytes(s);
-			byte[] value = SHA256.Create().ComputeHash(bytes);
-			string text = BitConverter.ToString(value).Replace("-", "").ToLower();
-			return text.Substring(0, 32);
-		}
-
-		// Token: 0x0600015F RID: 351 RVA: 0x00012458 File Offset: 0x00010658
-		private string CleanFastbootLog(string rawLog, string commandTitle = "")
-		{
-			StringBuilder stringBuilder = new StringBuilder();
-			bool flag = !string.IsNullOrEmpty(commandTitle);
-			if (flag)
-			{
-				stringBuilder.AppendLine(string.Format("\ud83d\udfe2 Comando enviado: {0}", commandTitle));
-			}
-			string[] array = rawLog.Split(new string[]
-			{
-				Environment.NewLine
-			}, StringSplitOptions.None);
-			bool flag2 = false;
-			foreach (string text in array)
-			{
-				string text2 = text.Trim();
-				bool flag3 = flag2;
-				if (flag3)
-				{
-					bool flag4 = text2.EndsWith(")");
-					if (flag4)
-					{
-						flag2 = false;
-					}
-				}
-				else
-				{
-					bool flag5 = text2.StartsWith("FAILED (remote:");
-					if (flag5)
-					{
-						flag2 = true;
-					}
-					else
-					{
-						bool flag6 = string.IsNullOrWhiteSpace(text2);
-						if (!flag6)
-						{
-							bool flag7 = text2.StartsWith("ERROR: serialno:");
-							if (flag7)
-							{
-								stringBuilder.AppendLine("\ud83d\udcf1 Serial Number: " + text2.Replace("ERROR: serialno:", "").Trim());
-							}
-							else
-							{
-								bool flag8 = text2.StartsWith("serialno:");
-								if (flag8)
-								{
-									stringBuilder.AppendLine("\ud83d\udcf1 Serial Number: " + text2.Replace("serialno:", "").Trim());
-								}
-								else
-								{
-									bool flag9 = Operators.CompareString(text2, "ERROR: ...", false) == 0 || Operators.CompareString(text2, "ERROR:", false) == 0;
-									if (!flag9)
-									{
-										bool flag10 = text2.Contains("(bootloader)");
-										if (flag10)
-										{
-											stringBuilder.AppendLine("\ud83d\udce5 Bootloader: " + text2.Replace("(bootloader)", "").Trim());
-										}
-										else
-										{
-											bool flag11 = text2.StartsWith("OKAY");
-											if (flag11)
-											{
-												stringBuilder.AppendLine("✅ OKAY " + text2.Substring(4).Trim());
-											}
-											else
-											{
-												bool flag12 = text2.StartsWith("FAILED");
-												if (flag12)
-												{
-													stringBuilder.AppendLine("❌ " + text2);
-												}
-												else
-												{
-													bool flag13 = text2.StartsWith("finished.");
-													if (flag13)
-													{
-														stringBuilder.AppendLine("⏱️ " + text2);
-													}
-													else
-													{
-														bool flag14 = text2.StartsWith("ERROR:");
-														if (flag14)
-														{
-															string text3 = text2.Replace("ERROR:", "").Trim();
-															bool flag15 = !string.IsNullOrWhiteSpace(text3);
-															if (flag15)
-															{
-																stringBuilder.AppendLine("⚠️ " + text3);
-															}
-														}
-														else
-														{
-															stringBuilder.AppendLine("\ud83d\udcc4 " + text2);
-														}
-													}
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-			return stringBuilder.ToString();
-		}
-
-		// Token: 0x06000160 RID: 352 RVA: 0x00012710 File Offset: 0x00010910
-		private bool WasUnlockSuccessful(string rawLog)
-		{
-			string text = rawLog.ToLower();
-			return text.Contains("unlock success") && text.Contains("fastboot unlock success") && text.Contains("okay") && !text.Contains("unlock operation is not allowed");
-		}
-
-		// Token: 0x17000015 RID: 21
-		// (get) Token: 0x06000163 RID: 355 RVA: 0x000156B2 File Offset: 0x000138B2
-		// (set) Token: 0x06000164 RID: 356 RVA: 0x000156BC File Offset: 0x000138BC
+		// Token: 0x1700000F RID: 15
+		// (get) Token: 0x06000131 RID: 305 RVA: 0x00013343 File Offset: 0x00011543
+		// (set) Token: 0x06000132 RID: 306 RVA: 0x00013350 File Offset: 0x00011550
 		internal virtual Button btnReadAdb
 		{
 			[CompilerGenerated]
@@ -15492,14 +12612,14 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000016 RID: 22
-		// (get) Token: 0x06000165 RID: 357 RVA: 0x000156FF File Offset: 0x000138FF
-		// (set) Token: 0x06000166 RID: 358 RVA: 0x00015709 File Offset: 0x00013909
+		// Token: 0x17000010 RID: 16
+		// (get) Token: 0x06000133 RID: 307 RVA: 0x00013393 File Offset: 0x00011593
+		// (set) Token: 0x06000134 RID: 308 RVA: 0x0001339D File Offset: 0x0001159D
 		internal virtual TextBox TextBox1 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x17000017 RID: 23
-		// (get) Token: 0x06000167 RID: 359 RVA: 0x00015712 File Offset: 0x00013912
-		// (set) Token: 0x06000168 RID: 360 RVA: 0x0001571C File Offset: 0x0001391C
+		// Token: 0x17000011 RID: 17
+		// (get) Token: 0x06000135 RID: 309 RVA: 0x000133A6 File Offset: 0x000115A6
+		// (set) Token: 0x06000136 RID: 310 RVA: 0x000133B0 File Offset: 0x000115B0
 		internal virtual ComboBox cmbDevicesAdb
 		{
 			[CompilerGenerated]
@@ -15526,29 +12646,29 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000018 RID: 24
-		// (get) Token: 0x06000169 RID: 361 RVA: 0x0001575F File Offset: 0x0001395F
-		// (set) Token: 0x0600016A RID: 362 RVA: 0x00015769 File Offset: 0x00013969
+		// Token: 0x17000012 RID: 18
+		// (get) Token: 0x06000137 RID: 311 RVA: 0x000133F3 File Offset: 0x000115F3
+		// (set) Token: 0x06000138 RID: 312 RVA: 0x000133FD File Offset: 0x000115FD
 		internal virtual ProgressBar ProgressBar1 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x17000019 RID: 25
-		// (get) Token: 0x0600016B RID: 363 RVA: 0x00015772 File Offset: 0x00013972
-		// (set) Token: 0x0600016C RID: 364 RVA: 0x0001577C File Offset: 0x0001397C
+		// Token: 0x17000013 RID: 19
+		// (get) Token: 0x06000139 RID: 313 RVA: 0x00013406 File Offset: 0x00011606
+		// (set) Token: 0x0600013A RID: 314 RVA: 0x00013410 File Offset: 0x00011610
 		internal virtual ErrorProvider ErrorProvider1 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x1700001A RID: 26
-		// (get) Token: 0x0600016D RID: 365 RVA: 0x00015785 File Offset: 0x00013985
-		// (set) Token: 0x0600016E RID: 366 RVA: 0x0001578F File Offset: 0x0001398F
+		// Token: 0x17000014 RID: 20
+		// (get) Token: 0x0600013B RID: 315 RVA: 0x00013419 File Offset: 0x00011619
+		// (set) Token: 0x0600013C RID: 316 RVA: 0x00013423 File Offset: 0x00011623
 		internal virtual Label Label1 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x1700001B RID: 27
-		// (get) Token: 0x0600016F RID: 367 RVA: 0x00015798 File Offset: 0x00013998
-		// (set) Token: 0x06000170 RID: 368 RVA: 0x000157A2 File Offset: 0x000139A2
+		// Token: 0x17000015 RID: 21
+		// (get) Token: 0x0600013D RID: 317 RVA: 0x0001342C File Offset: 0x0001162C
+		// (set) Token: 0x0600013E RID: 318 RVA: 0x00013436 File Offset: 0x00011636
 		internal virtual Label Label2 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x1700001C RID: 28
-		// (get) Token: 0x06000171 RID: 369 RVA: 0x000157AB File Offset: 0x000139AB
-		// (set) Token: 0x06000172 RID: 370 RVA: 0x000157B8 File Offset: 0x000139B8
+		// Token: 0x17000016 RID: 22
+		// (get) Token: 0x0600013F RID: 319 RVA: 0x0001343F File Offset: 0x0001163F
+		// (set) Token: 0x06000140 RID: 320 RVA: 0x0001344C File Offset: 0x0001164C
 		internal virtual ComboBox cmbPuertos
 		{
 			[CompilerGenerated]
@@ -15575,9 +12695,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x1700001D RID: 29
-		// (get) Token: 0x06000173 RID: 371 RVA: 0x000157FB File Offset: 0x000139FB
-		// (set) Token: 0x06000174 RID: 372 RVA: 0x00015808 File Offset: 0x00013A08
+		// Token: 0x17000017 RID: 23
+		// (get) Token: 0x06000141 RID: 321 RVA: 0x0001348F File Offset: 0x0001168F
+		// (set) Token: 0x06000142 RID: 322 RVA: 0x0001349C File Offset: 0x0001169C
 		internal virtual Button btnReadComSm
 		{
 			[CompilerGenerated]
@@ -15604,9 +12724,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x1700001E RID: 30
-		// (get) Token: 0x06000175 RID: 373 RVA: 0x0001584B File Offset: 0x00013A4B
-		// (set) Token: 0x06000176 RID: 374 RVA: 0x00015858 File Offset: 0x00013A58
+		// Token: 0x17000018 RID: 24
+		// (get) Token: 0x06000143 RID: 323 RVA: 0x000134DF File Offset: 0x000116DF
+		// (set) Token: 0x06000144 RID: 324 RVA: 0x000134EC File Offset: 0x000116EC
 		internal virtual Button btnactatadb
 		{
 			[CompilerGenerated]
@@ -15633,9 +12753,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x1700001F RID: 31
-		// (get) Token: 0x06000177 RID: 375 RVA: 0x0001589B File Offset: 0x00013A9B
-		// (set) Token: 0x06000178 RID: 376 RVA: 0x000158A8 File Offset: 0x00013AA8
+		// Token: 0x17000019 RID: 25
+		// (get) Token: 0x06000145 RID: 325 RVA: 0x0001352F File Offset: 0x0001172F
+		// (set) Token: 0x06000146 RID: 326 RVA: 0x0001353C File Offset: 0x0001173C
 		internal virtual Button btnKnox
 		{
 			[CompilerGenerated]
@@ -15662,9 +12782,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000020 RID: 32
-		// (get) Token: 0x06000179 RID: 377 RVA: 0x000158EB File Offset: 0x00013AEB
-		// (set) Token: 0x0600017A RID: 378 RVA: 0x000158F8 File Offset: 0x00013AF8
+		// Token: 0x1700001A RID: 26
+		// (get) Token: 0x06000147 RID: 327 RVA: 0x0001357F File Offset: 0x0001177F
+		// (set) Token: 0x06000148 RID: 328 RVA: 0x0001358C File Offset: 0x0001178C
 		internal virtual Button btnFRP
 		{
 			[CompilerGenerated]
@@ -15691,9 +12811,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000021 RID: 33
-		// (get) Token: 0x0600017B RID: 379 RVA: 0x0001593B File Offset: 0x00013B3B
-		// (set) Token: 0x0600017C RID: 380 RVA: 0x00015948 File Offset: 0x00013B48
+		// Token: 0x1700001B RID: 27
+		// (get) Token: 0x06000149 RID: 329 RVA: 0x000135CF File Offset: 0x000117CF
+		// (set) Token: 0x0600014A RID: 330 RVA: 0x000135DC File Offset: 0x000117DC
 		internal virtual Button btnMsjTelcelNew
 		{
 			[CompilerGenerated]
@@ -15720,14 +12840,14 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000022 RID: 34
-		// (get) Token: 0x0600017D RID: 381 RVA: 0x0001598B File Offset: 0x00013B8B
-		// (set) Token: 0x0600017E RID: 382 RVA: 0x00015995 File Offset: 0x00013B95
+		// Token: 0x1700001C RID: 28
+		// (get) Token: 0x0600014B RID: 331 RVA: 0x0001361F File Offset: 0x0001181F
+		// (set) Token: 0x0600014C RID: 332 RVA: 0x00013629 File Offset: 0x00011829
 		internal virtual Button btnxploit5 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x17000023 RID: 35
-		// (get) Token: 0x0600017F RID: 383 RVA: 0x0001599E File Offset: 0x00013B9E
-		// (set) Token: 0x06000180 RID: 384 RVA: 0x000159A8 File Offset: 0x00013BA8
+		// Token: 0x1700001D RID: 29
+		// (get) Token: 0x0600014D RID: 333 RVA: 0x00013632 File Offset: 0x00011832
+		// (set) Token: 0x0600014E RID: 334 RVA: 0x0001363C File Offset: 0x0001183C
 		internal virtual Button btnRemovePayOld
 		{
 			[CompilerGenerated]
@@ -15754,9 +12874,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000024 RID: 36
-		// (get) Token: 0x06000181 RID: 385 RVA: 0x000159EB File Offset: 0x00013BEB
-		// (set) Token: 0x06000182 RID: 386 RVA: 0x000159F8 File Offset: 0x00013BF8
+		// Token: 0x1700001E RID: 30
+		// (get) Token: 0x0600014F RID: 335 RVA: 0x0001367F File Offset: 0x0001187F
+		// (set) Token: 0x06000150 RID: 336 RVA: 0x0001368C File Offset: 0x0001188C
 		internal virtual Button btnMsjTelcelOld
 		{
 			[CompilerGenerated]
@@ -15783,9 +12903,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000025 RID: 37
-		// (get) Token: 0x06000183 RID: 387 RVA: 0x00015A3B File Offset: 0x00013C3B
-		// (set) Token: 0x06000184 RID: 388 RVA: 0x00015A48 File Offset: 0x00013C48
+		// Token: 0x1700001F RID: 31
+		// (get) Token: 0x06000151 RID: 337 RVA: 0x000136CF File Offset: 0x000118CF
+		// (set) Token: 0x06000152 RID: 338 RVA: 0x000136DC File Offset: 0x000118DC
 		internal virtual Button btnQRFRP
 		{
 			[CompilerGenerated]
@@ -15812,9 +12932,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000026 RID: 38
-		// (get) Token: 0x06000185 RID: 389 RVA: 0x00015A8B File Offset: 0x00013C8B
-		// (set) Token: 0x06000186 RID: 390 RVA: 0x00015A98 File Offset: 0x00013C98
+		// Token: 0x17000020 RID: 32
+		// (get) Token: 0x06000153 RID: 339 RVA: 0x0001371F File Offset: 0x0001191F
+		// (set) Token: 0x06000154 RID: 340 RVA: 0x0001372C File Offset: 0x0001192C
 		internal virtual Button btnRemovePayNew
 		{
 			[CompilerGenerated]
@@ -15841,19 +12961,19 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000027 RID: 39
-		// (get) Token: 0x06000187 RID: 391 RVA: 0x00015ADB File Offset: 0x00013CDB
-		// (set) Token: 0x06000188 RID: 392 RVA: 0x00015AE5 File Offset: 0x00013CE5
+		// Token: 0x17000021 RID: 33
+		// (get) Token: 0x06000155 RID: 341 RVA: 0x0001376F File Offset: 0x0001196F
+		// (set) Token: 0x06000156 RID: 342 RVA: 0x00013779 File Offset: 0x00011979
 		internal virtual Button btnxploit6 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x17000028 RID: 40
-		// (get) Token: 0x06000189 RID: 393 RVA: 0x00015AEE File Offset: 0x00013CEE
-		// (set) Token: 0x0600018A RID: 394 RVA: 0x00015AF8 File Offset: 0x00013CF8
+		// Token: 0x17000022 RID: 34
+		// (get) Token: 0x06000157 RID: 343 RVA: 0x00013782 File Offset: 0x00011982
+		// (set) Token: 0x06000158 RID: 344 RVA: 0x0001378C File Offset: 0x0001198C
 		internal virtual Button btnxploit7 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x17000029 RID: 41
-		// (get) Token: 0x0600018B RID: 395 RVA: 0x00015B01 File Offset: 0x00013D01
-		// (set) Token: 0x0600018C RID: 396 RVA: 0x00015B0C File Offset: 0x00013D0C
+		// Token: 0x17000023 RID: 35
+		// (get) Token: 0x06000159 RID: 345 RVA: 0x00013795 File Offset: 0x00011995
+		// (set) Token: 0x0600015A RID: 346 RVA: 0x000137A0 File Offset: 0x000119A0
 		internal virtual Button btnInstallITadmin
 		{
 			[CompilerGenerated]
@@ -15880,9 +13000,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x1700002A RID: 42
-		// (get) Token: 0x0600018D RID: 397 RVA: 0x00015B4F File Offset: 0x00013D4F
-		// (set) Token: 0x0600018E RID: 398 RVA: 0x00015B5C File Offset: 0x00013D5C
+		// Token: 0x17000024 RID: 36
+		// (get) Token: 0x0600015B RID: 347 RVA: 0x000137E3 File Offset: 0x000119E3
+		// (set) Token: 0x0600015C RID: 348 RVA: 0x000137F0 File Offset: 0x000119F0
 		internal virtual Button btnFixITadmin
 		{
 			[CompilerGenerated]
@@ -15909,39 +13029,39 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x1700002B RID: 43
-		// (get) Token: 0x0600018F RID: 399 RVA: 0x00015B9F File Offset: 0x00013D9F
-		// (set) Token: 0x06000190 RID: 400 RVA: 0x00015BA9 File Offset: 0x00013DA9
+		// Token: 0x17000025 RID: 37
+		// (get) Token: 0x0600015D RID: 349 RVA: 0x00013833 File Offset: 0x00011A33
+		// (set) Token: 0x0600015E RID: 350 RVA: 0x0001383D File Offset: 0x00011A3D
 		internal virtual TabControl Tstool { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x1700002C RID: 44
-		// (get) Token: 0x06000191 RID: 401 RVA: 0x00015BB2 File Offset: 0x00013DB2
-		// (set) Token: 0x06000192 RID: 402 RVA: 0x00015BBC File Offset: 0x00013DBC
+		// Token: 0x17000026 RID: 38
+		// (get) Token: 0x0600015F RID: 351 RVA: 0x00013846 File Offset: 0x00011A46
+		// (set) Token: 0x06000160 RID: 352 RVA: 0x00013850 File Offset: 0x00011A50
 		internal virtual TabPage Home { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x1700002D RID: 45
-		// (get) Token: 0x06000193 RID: 403 RVA: 0x00015BC5 File Offset: 0x00013DC5
-		// (set) Token: 0x06000194 RID: 404 RVA: 0x00015BCF File Offset: 0x00013DCF
+		// Token: 0x17000027 RID: 39
+		// (get) Token: 0x06000161 RID: 353 RVA: 0x00013859 File Offset: 0x00011A59
+		// (set) Token: 0x06000162 RID: 354 RVA: 0x00013863 File Offset: 0x00011A63
 		internal virtual TabPage Samsung { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x1700002E RID: 46
-		// (get) Token: 0x06000195 RID: 405 RVA: 0x00015BD8 File Offset: 0x00013DD8
-		// (set) Token: 0x06000196 RID: 406 RVA: 0x00015BE2 File Offset: 0x00013DE2
+		// Token: 0x17000028 RID: 40
+		// (get) Token: 0x06000163 RID: 355 RVA: 0x0001386C File Offset: 0x00011A6C
+		// (set) Token: 0x06000164 RID: 356 RVA: 0x00013876 File Offset: 0x00011A76
 		internal virtual TabPage Motorola { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x1700002F RID: 47
-		// (get) Token: 0x06000197 RID: 407 RVA: 0x00015BEB File Offset: 0x00013DEB
-		// (set) Token: 0x06000198 RID: 408 RVA: 0x00015BF5 File Offset: 0x00013DF5
+		// Token: 0x17000029 RID: 41
+		// (get) Token: 0x06000165 RID: 357 RVA: 0x0001387F File Offset: 0x00011A7F
+		// (set) Token: 0x06000166 RID: 358 RVA: 0x00013889 File Offset: 0x00011A89
 		internal virtual TabPage Modelos { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x17000030 RID: 48
-		// (get) Token: 0x06000199 RID: 409 RVA: 0x00015BFE File Offset: 0x00013DFE
-		// (set) Token: 0x0600019A RID: 410 RVA: 0x00015C08 File Offset: 0x00013E08
+		// Token: 0x1700002A RID: 42
+		// (get) Token: 0x06000167 RID: 359 RVA: 0x00013892 File Offset: 0x00011A92
+		// (set) Token: 0x06000168 RID: 360 RVA: 0x0001389C File Offset: 0x00011A9C
 		internal virtual ListBox lstModels { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x17000031 RID: 49
-		// (get) Token: 0x0600019B RID: 411 RVA: 0x00015C11 File Offset: 0x00013E11
-		// (set) Token: 0x0600019C RID: 412 RVA: 0x00015C1C File Offset: 0x00013E1C
+		// Token: 0x1700002B RID: 43
+		// (get) Token: 0x06000169 RID: 361 RVA: 0x000138A5 File Offset: 0x00011AA5
+		// (set) Token: 0x0600016A RID: 362 RVA: 0x000138B0 File Offset: 0x00011AB0
 		internal virtual ListBox lstBrands
 		{
 			[CompilerGenerated]
@@ -15968,9 +13088,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000032 RID: 50
-		// (get) Token: 0x0600019D RID: 413 RVA: 0x00015C5F File Offset: 0x00013E5F
-		// (set) Token: 0x0600019E RID: 414 RVA: 0x00015C6C File Offset: 0x00013E6C
+		// Token: 0x1700002C RID: 44
+		// (get) Token: 0x0600016B RID: 363 RVA: 0x000138F3 File Offset: 0x00011AF3
+		// (set) Token: 0x0600016C RID: 364 RVA: 0x00013900 File Offset: 0x00011B00
 		internal virtual TextBox txtSearch
 		{
 			[CompilerGenerated]
@@ -16003,14 +13123,14 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000033 RID: 51
-		// (get) Token: 0x0600019F RID: 415 RVA: 0x00015CE5 File Offset: 0x00013EE5
-		// (set) Token: 0x060001A0 RID: 416 RVA: 0x00015CEF File Offset: 0x00013EEF
+		// Token: 0x1700002D RID: 45
+		// (get) Token: 0x0600016D RID: 365 RVA: 0x00013979 File Offset: 0x00011B79
+		// (set) Token: 0x0600016E RID: 366 RVA: 0x00013983 File Offset: 0x00011B83
 		internal virtual TabPage ITAdmin { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x17000034 RID: 52
-		// (get) Token: 0x060001A1 RID: 417 RVA: 0x00015CF8 File Offset: 0x00013EF8
-		// (set) Token: 0x060001A2 RID: 418 RVA: 0x00015D04 File Offset: 0x00013F04
+		// Token: 0x1700002E RID: 46
+		// (get) Token: 0x0600016F RID: 367 RVA: 0x0001398C File Offset: 0x00011B8C
+		// (set) Token: 0x06000170 RID: 368 RVA: 0x00013998 File Offset: 0x00011B98
 		internal virtual Button btnPlayOriginal
 		{
 			[CompilerGenerated]
@@ -16037,9 +13157,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000035 RID: 53
-		// (get) Token: 0x060001A3 RID: 419 RVA: 0x00015D47 File Offset: 0x00013F47
-		// (set) Token: 0x060001A4 RID: 420 RVA: 0x00015D54 File Offset: 0x00013F54
+		// Token: 0x1700002F RID: 47
+		// (get) Token: 0x06000171 RID: 369 RVA: 0x000139DB File Offset: 0x00011BDB
+		// (set) Token: 0x06000172 RID: 370 RVA: 0x000139E8 File Offset: 0x00011BE8
 		internal virtual Button btnitadminall
 		{
 			[CompilerGenerated]
@@ -16066,9 +13186,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000036 RID: 54
-		// (get) Token: 0x060001A5 RID: 421 RVA: 0x00015D97 File Offset: 0x00013F97
-		// (set) Token: 0x060001A6 RID: 422 RVA: 0x00015DA4 File Offset: 0x00013FA4
+		// Token: 0x17000030 RID: 48
+		// (get) Token: 0x06000173 RID: 371 RVA: 0x00013A2B File Offset: 0x00011C2B
+		// (set) Token: 0x06000174 RID: 372 RVA: 0x00013A38 File Offset: 0x00011C38
 		internal virtual Button btnXploitZ
 		{
 			[CompilerGenerated]
@@ -16095,14 +13215,14 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000037 RID: 55
-		// (get) Token: 0x060001A7 RID: 423 RVA: 0x00015DE7 File Offset: 0x00013FE7
-		// (set) Token: 0x060001A8 RID: 424 RVA: 0x00015DF1 File Offset: 0x00013FF1
+		// Token: 0x17000031 RID: 49
+		// (get) Token: 0x06000175 RID: 373 RVA: 0x00013A7B File Offset: 0x00011C7B
+		// (set) Token: 0x06000176 RID: 374 RVA: 0x00013A85 File Offset: 0x00011C85
 		internal virtual TabPage HuaweiHonor { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x17000038 RID: 56
-		// (get) Token: 0x060001A9 RID: 425 RVA: 0x00015DFA File Offset: 0x00013FFA
-		// (set) Token: 0x060001AA RID: 426 RVA: 0x00015E04 File Offset: 0x00014004
+		// Token: 0x17000032 RID: 50
+		// (get) Token: 0x06000177 RID: 375 RVA: 0x00013A8E File Offset: 0x00011C8E
+		// (set) Token: 0x06000178 RID: 376 RVA: 0x00013A98 File Offset: 0x00011C98
 		internal virtual Button btnmdmnewatt
 		{
 			[CompilerGenerated]
@@ -16129,9 +13249,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000039 RID: 57
-		// (get) Token: 0x060001AB RID: 427 RVA: 0x00015E47 File Offset: 0x00014047
-		// (set) Token: 0x060001AC RID: 428 RVA: 0x00015E54 File Offset: 0x00014054
+		// Token: 0x17000033 RID: 51
+		// (get) Token: 0x06000179 RID: 377 RVA: 0x00013ADB File Offset: 0x00011CDB
+		// (set) Token: 0x0600017A RID: 378 RVA: 0x00013AE8 File Offset: 0x00011CE8
 		internal virtual ListView ListView1
 		{
 			[CompilerGenerated]
@@ -16158,9 +13278,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x1700003A RID: 58
-		// (get) Token: 0x060001AD RID: 429 RVA: 0x00015E97 File Offset: 0x00014097
-		// (set) Token: 0x060001AE RID: 430 RVA: 0x00015EA4 File Offset: 0x000140A4
+		// Token: 0x17000034 RID: 52
+		// (get) Token: 0x0600017B RID: 379 RVA: 0x00013B2B File Offset: 0x00011D2B
+		// (set) Token: 0x0600017C RID: 380 RVA: 0x00013B38 File Offset: 0x00011D38
 		internal virtual Button btnReadFastboot
 		{
 			[CompilerGenerated]
@@ -16187,9 +13307,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x1700003B RID: 59
-		// (get) Token: 0x060001AF RID: 431 RVA: 0x00015EE7 File Offset: 0x000140E7
-		// (set) Token: 0x060001B0 RID: 432 RVA: 0x00015EF4 File Offset: 0x000140F4
+		// Token: 0x17000035 RID: 53
+		// (get) Token: 0x0600017D RID: 381 RVA: 0x00013B7B File Offset: 0x00011D7B
+		// (set) Token: 0x0600017E RID: 382 RVA: 0x00013B88 File Offset: 0x00011D88
 		internal virtual ComboBox cmbDevices
 		{
 			[CompilerGenerated]
@@ -16216,9 +13336,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x1700003C RID: 60
-		// (get) Token: 0x060001B1 RID: 433 RVA: 0x00015F37 File Offset: 0x00014137
-		// (set) Token: 0x060001B2 RID: 434 RVA: 0x00015F44 File Offset: 0x00014144
+		// Token: 0x17000036 RID: 54
+		// (get) Token: 0x0600017F RID: 383 RVA: 0x00013BCB File Offset: 0x00011DCB
+		// (set) Token: 0x06000180 RID: 384 RVA: 0x00013BD8 File Offset: 0x00011DD8
 		internal virtual Button btncheckport
 		{
 			[CompilerGenerated]
@@ -16245,9 +13365,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x1700003D RID: 61
-		// (get) Token: 0x060001B3 RID: 435 RVA: 0x00015F87 File Offset: 0x00014187
-		// (set) Token: 0x060001B4 RID: 436 RVA: 0x00015F94 File Offset: 0x00014194
+		// Token: 0x17000037 RID: 55
+		// (get) Token: 0x06000181 RID: 385 RVA: 0x00013C1B File Offset: 0x00011E1B
+		// (set) Token: 0x06000182 RID: 386 RVA: 0x00013C28 File Offset: 0x00011E28
 		internal virtual Button btnReadAdbAll
 		{
 			[CompilerGenerated]
@@ -16259,7 +13379,7 @@ namespace Tstool
 			[MethodImpl(MethodImplOptions.Synchronized)]
 			set
 			{
-				EventHandler value2 = new EventHandler(this.btnReadAdbAll_Click);
+				EventHandler value2 = new EventHandler(this.btnReadADBAll_Click);
 				Button btnReadAdbAll = this._btnReadAdbAll;
 				if (btnReadAdbAll != null)
 				{
@@ -16274,9 +13394,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x1700003E RID: 62
-		// (get) Token: 0x060001B5 RID: 437 RVA: 0x00015FD7 File Offset: 0x000141D7
-		// (set) Token: 0x060001B6 RID: 438 RVA: 0x00015FE4 File Offset: 0x000141E4
+		// Token: 0x17000038 RID: 56
+		// (get) Token: 0x06000183 RID: 387 RVA: 0x00013C6B File Offset: 0x00011E6B
+		// (set) Token: 0x06000184 RID: 388 RVA: 0x00013C78 File Offset: 0x00011E78
 		internal virtual Button btnopenfwmt
 		{
 			[CompilerGenerated]
@@ -16288,7 +13408,7 @@ namespace Tstool
 			[MethodImpl(MethodImplOptions.Synchronized)]
 			set
 			{
-				EventHandler value2 = new EventHandler(this.btnOpenFwMt_Click);
+				EventHandler value2 = new EventHandler(this.btnopenfwmt_Click);
 				Button btnopenfwmt = this._btnopenfwmt;
 				if (btnopenfwmt != null)
 				{
@@ -16303,9 +13423,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x1700003F RID: 63
-		// (get) Token: 0x060001B7 RID: 439 RVA: 0x00016027 File Offset: 0x00014227
-		// (set) Token: 0x060001B8 RID: 440 RVA: 0x00016034 File Offset: 0x00014234
+		// Token: 0x17000039 RID: 57
+		// (get) Token: 0x06000185 RID: 389 RVA: 0x00013CBB File Offset: 0x00011EBB
+		// (set) Token: 0x06000186 RID: 390 RVA: 0x00013CC8 File Offset: 0x00011EC8
 		internal virtual Button btndwlfwmt
 		{
 			[CompilerGenerated]
@@ -16332,38 +13452,38 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000040 RID: 64
-		// (get) Token: 0x060001B9 RID: 441 RVA: 0x00016077 File Offset: 0x00014277
-		// (set) Token: 0x060001BA RID: 442 RVA: 0x00016084 File Offset: 0x00014284
-		internal virtual Button btnConsultarPosiblesBloqueos
+		// Token: 0x1700003A RID: 58
+		// (get) Token: 0x06000187 RID: 391 RVA: 0x00013D0B File Offset: 0x00011F0B
+		// (set) Token: 0x06000188 RID: 392 RVA: 0x00013D18 File Offset: 0x00011F18
+		internal virtual Button btnCheckMDMPacks
 		{
 			[CompilerGenerated]
 			get
 			{
-				return this._btnConsultarPosiblesBloqueos;
+				return this._btnCheckMDMPacks;
 			}
 			[CompilerGenerated]
 			[MethodImpl(MethodImplOptions.Synchronized)]
 			set
 			{
 				EventHandler value2 = new EventHandler(this.btnConsultarPosiblesBloqueos_Click);
-				Button btnConsultarPosiblesBloqueos = this._btnConsultarPosiblesBloqueos;
-				if (btnConsultarPosiblesBloqueos != null)
+				Button btnCheckMDMPacks = this._btnCheckMDMPacks;
+				if (btnCheckMDMPacks != null)
 				{
-					btnConsultarPosiblesBloqueos.Click -= value2;
+					btnCheckMDMPacks.Click -= value2;
 				}
-				this._btnConsultarPosiblesBloqueos = value;
-				btnConsultarPosiblesBloqueos = this._btnConsultarPosiblesBloqueos;
-				if (btnConsultarPosiblesBloqueos != null)
+				this._btnCheckMDMPacks = value;
+				btnCheckMDMPacks = this._btnCheckMDMPacks;
+				if (btnCheckMDMPacks != null)
 				{
-					btnConsultarPosiblesBloqueos.Click += value2;
+					btnCheckMDMPacks.Click += value2;
 				}
 			}
 		}
 
-		// Token: 0x17000041 RID: 65
-		// (get) Token: 0x060001BB RID: 443 RVA: 0x000160C7 File Offset: 0x000142C7
-		// (set) Token: 0x060001BC RID: 444 RVA: 0x000160D4 File Offset: 0x000142D4
+		// Token: 0x1700003B RID: 59
+		// (get) Token: 0x06000189 RID: 393 RVA: 0x00013D5B File Offset: 0x00011F5B
+		// (set) Token: 0x0600018A RID: 394 RVA: 0x00013D68 File Offset: 0x00011F68
 		internal virtual Button btnCleanMotoApps
 		{
 			[CompilerGenerated]
@@ -16390,9 +13510,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000042 RID: 66
-		// (get) Token: 0x060001BD RID: 445 RVA: 0x00016117 File Offset: 0x00014317
-		// (set) Token: 0x060001BE RID: 446 RVA: 0x00016124 File Offset: 0x00014324
+		// Token: 0x1700003C RID: 60
+		// (get) Token: 0x0600018B RID: 395 RVA: 0x00013DAB File Offset: 0x00011FAB
+		// (set) Token: 0x0600018C RID: 396 RVA: 0x00013DB8 File Offset: 0x00011FB8
 		internal virtual Button btnMDMTecno
 		{
 			[CompilerGenerated]
@@ -16419,9 +13539,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000043 RID: 67
-		// (get) Token: 0x060001BF RID: 447 RVA: 0x00016167 File Offset: 0x00014367
-		// (set) Token: 0x060001C0 RID: 448 RVA: 0x00016174 File Offset: 0x00014374
+		// Token: 0x1700003D RID: 61
+		// (get) Token: 0x0600018D RID: 397 RVA: 0x00013DFB File Offset: 0x00011FFB
+		// (set) Token: 0x0600018E RID: 398 RVA: 0x00013E08 File Offset: 0x00012008
 		internal virtual Button btnComparar
 		{
 			[CompilerGenerated]
@@ -16448,38 +13568,14 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000044 RID: 68
-		// (get) Token: 0x060001C1 RID: 449 RVA: 0x000161B7 File Offset: 0x000143B7
-		// (set) Token: 0x060001C2 RID: 450 RVA: 0x000161C4 File Offset: 0x000143C4
-		internal virtual Button BtnPatchFileMotorola
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._BtnPatchFileMotorola;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.BtnPatchFileMotorola_Click);
-				Button btnPatchFileMotorola = this._BtnPatchFileMotorola;
-				if (btnPatchFileMotorola != null)
-				{
-					btnPatchFileMotorola.Click -= value2;
-				}
-				this._BtnPatchFileMotorola = value;
-				btnPatchFileMotorola = this._BtnPatchFileMotorola;
-				if (btnPatchFileMotorola != null)
-				{
-					btnPatchFileMotorola.Click += value2;
-				}
-			}
-		}
+		// Token: 0x1700003E RID: 62
+		// (get) Token: 0x0600018F RID: 399 RVA: 0x00013E4B File Offset: 0x0001204B
+		// (set) Token: 0x06000190 RID: 400 RVA: 0x00013E55 File Offset: 0x00012055
+		internal virtual Button BtnPatchFileMotorola { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
 
-		// Token: 0x17000045 RID: 69
-		// (get) Token: 0x060001C3 RID: 451 RVA: 0x00016207 File Offset: 0x00014407
-		// (set) Token: 0x060001C4 RID: 452 RVA: 0x00016214 File Offset: 0x00014414
+		// Token: 0x1700003F RID: 63
+		// (get) Token: 0x06000191 RID: 401 RVA: 0x00013E5E File Offset: 0x0001205E
+		// (set) Token: 0x06000192 RID: 402 RVA: 0x00013E68 File Offset: 0x00012068
 		internal virtual Button btnPatchFileOppo
 		{
 			[CompilerGenerated]
@@ -16506,9 +13602,9 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000046 RID: 70
-		// (get) Token: 0x060001C5 RID: 453 RVA: 0x00016257 File Offset: 0x00014457
-		// (set) Token: 0x060001C6 RID: 454 RVA: 0x00016264 File Offset: 0x00014464
+		// Token: 0x17000040 RID: 64
+		// (get) Token: 0x06000193 RID: 403 RVA: 0x00013EAB File Offset: 0x000120AB
+		// (set) Token: 0x06000194 RID: 404 RVA: 0x00013EB8 File Offset: 0x000120B8
 		internal virtual Button BtnPatchFileHonor
 		{
 			[CompilerGenerated]
@@ -16535,1532 +13631,14 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000047 RID: 71
-		// (get) Token: 0x060001C7 RID: 455 RVA: 0x000162A7 File Offset: 0x000144A7
-		// (set) Token: 0x060001C8 RID: 456 RVA: 0x000162B1 File Offset: 0x000144B1
-		internal virtual TabPage Tools { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000048 RID: 72
-		// (get) Token: 0x060001C9 RID: 457 RVA: 0x000162BA File Offset: 0x000144BA
-		// (set) Token: 0x060001CA RID: 458 RVA: 0x000162C4 File Offset: 0x000144C4
-		internal virtual Button btnfu
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnfu;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnfu_Click);
-				Button btnfu = this._btnfu;
-				if (btnfu != null)
-				{
-					btnfu.Click -= value2;
-				}
-				this._btnfu = value;
-				btnfu = this._btnfu;
-				if (btnfu != null)
-				{
-					btnfu.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000049 RID: 73
-		// (get) Token: 0x060001CB RID: 459 RVA: 0x00016307 File Offset: 0x00014507
-		// (set) Token: 0x060001CC RID: 460 RVA: 0x00016314 File Offset: 0x00014514
-		internal virtual Button btnfacto
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnfacto;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnfacto_Click);
-				Button btnfacto = this._btnfacto;
-				if (btnfacto != null)
-				{
-					btnfacto.Click -= value2;
-				}
-				this._btnfacto = value;
-				btnfacto = this._btnfacto;
-				if (btnfacto != null)
-				{
-					btnfacto.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700004A RID: 74
-		// (get) Token: 0x060001CD RID: 461 RVA: 0x00016357 File Offset: 0x00014557
-		// (set) Token: 0x060001CE RID: 462 RVA: 0x00016364 File Offset: 0x00014564
-		internal virtual Button btnKgNew
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnKgNew;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnKgNew_Click);
-				Button btnKgNew = this._btnKgNew;
-				if (btnKgNew != null)
-				{
-					btnKgNew.Click -= value2;
-				}
-				this._btnKgNew = value;
-				btnKgNew = this._btnKgNew;
-				if (btnKgNew != null)
-				{
-					btnKgNew.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700004B RID: 75
-		// (get) Token: 0x060001CF RID: 463 RVA: 0x000163A7 File Offset: 0x000145A7
-		// (set) Token: 0x060001D0 RID: 464 RVA: 0x000163B4 File Offset: 0x000145B4
-		internal virtual Button btnkglocktoactive
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnkglocktoactive;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnkglocktoactive_Click);
-				Button btnkglocktoactive = this._btnkglocktoactive;
-				if (btnkglocktoactive != null)
-				{
-					btnkglocktoactive.Click -= value2;
-				}
-				this._btnkglocktoactive = value;
-				btnkglocktoactive = this._btnkglocktoactive;
-				if (btnkglocktoactive != null)
-				{
-					btnkglocktoactive.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700004C RID: 76
-		// (get) Token: 0x060001D1 RID: 465 RVA: 0x000163F7 File Offset: 0x000145F7
-		// (set) Token: 0x060001D2 RID: 466 RVA: 0x00016404 File Offset: 0x00014604
-		internal virtual Button BtnUnlockPixel
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._BtnUnlockPixel;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnUnlockPixel_Click);
-				Button btnUnlockPixel = this._BtnUnlockPixel;
-				if (btnUnlockPixel != null)
-				{
-					btnUnlockPixel.Click -= value2;
-				}
-				this._BtnUnlockPixel = value;
-				btnUnlockPixel = this._BtnUnlockPixel;
-				if (btnUnlockPixel != null)
-				{
-					btnUnlockPixel.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700004D RID: 77
-		// (get) Token: 0x060001D3 RID: 467 RVA: 0x00016447 File Offset: 0x00014647
-		// (set) Token: 0x060001D4 RID: 468 RVA: 0x00016454 File Offset: 0x00014654
-		internal virtual Button btnCleanMDMApps
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnCleanMDMApps;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnCleanMDMApps_Click);
-				Button btnCleanMDMApps = this._btnCleanMDMApps;
-				if (btnCleanMDMApps != null)
-				{
-					btnCleanMDMApps.Click -= value2;
-				}
-				this._btnCleanMDMApps = value;
-				btnCleanMDMApps = this._btnCleanMDMApps;
-				if (btnCleanMDMApps != null)
-				{
-					btnCleanMDMApps.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700004E RID: 78
-		// (get) Token: 0x060001D5 RID: 469 RVA: 0x00016497 File Offset: 0x00014697
-		// (set) Token: 0x060001D6 RID: 470 RVA: 0x000164A4 File Offset: 0x000146A4
-		internal virtual Button btnRebootDevice
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnRebootDevice;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnRebootDevice_Click);
-				Button btnRebootDevice = this._btnRebootDevice;
-				if (btnRebootDevice != null)
-				{
-					btnRebootDevice.Click -= value2;
-				}
-				this._btnRebootDevice = value;
-				btnRebootDevice = this._btnRebootDevice;
-				if (btnRebootDevice != null)
-				{
-					btnRebootDevice.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700004F RID: 79
-		// (get) Token: 0x060001D7 RID: 471 RVA: 0x000164E7 File Offset: 0x000146E7
-		// (set) Token: 0x060001D8 RID: 472 RVA: 0x000164F4 File Offset: 0x000146F4
-		internal virtual Button btnRebootRecovery
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnRebootRecovery;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnRebootRecovery_Click);
-				Button btnRebootRecovery = this._btnRebootRecovery;
-				if (btnRebootRecovery != null)
-				{
-					btnRebootRecovery.Click -= value2;
-				}
-				this._btnRebootRecovery = value;
-				btnRebootRecovery = this._btnRebootRecovery;
-				if (btnRebootRecovery != null)
-				{
-					btnRebootRecovery.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000050 RID: 80
-		// (get) Token: 0x060001D9 RID: 473 RVA: 0x00016537 File Offset: 0x00014737
-		// (set) Token: 0x060001DA RID: 474 RVA: 0x00016544 File Offset: 0x00014744
-		internal virtual Button btnCheckVirusOffline
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnCheckVirusOffline;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnCheckVirusOffline_Click);
-				Button btnCheckVirusOffline = this._btnCheckVirusOffline;
-				if (btnCheckVirusOffline != null)
-				{
-					btnCheckVirusOffline.Click -= value2;
-				}
-				this._btnCheckVirusOffline = value;
-				btnCheckVirusOffline = this._btnCheckVirusOffline;
-				if (btnCheckVirusOffline != null)
-				{
-					btnCheckVirusOffline.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000051 RID: 81
-		// (get) Token: 0x060001DB RID: 475 RVA: 0x00016587 File Offset: 0x00014787
-		// (set) Token: 0x060001DC RID: 476 RVA: 0x00016594 File Offset: 0x00014794
-		internal virtual Button btnReadHuaweiInfo
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnReadHuaweiInfo;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnReadHuaweiInfo_Click);
-				Button btnReadHuaweiInfo = this._btnReadHuaweiInfo;
-				if (btnReadHuaweiInfo != null)
-				{
-					btnReadHuaweiInfo.Click -= value2;
-				}
-				this._btnReadHuaweiInfo = value;
-				btnReadHuaweiInfo = this._btnReadHuaweiInfo;
-				if (btnReadHuaweiInfo != null)
-				{
-					btnReadHuaweiInfo.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000052 RID: 82
-		// (get) Token: 0x060001DD RID: 477 RVA: 0x000165D7 File Offset: 0x000147D7
-		// (set) Token: 0x060001DE RID: 478 RVA: 0x000165E4 File Offset: 0x000147E4
-		internal virtual Button btnRebootDeviceBootloader
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnRebootDeviceBootloader;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnRebootDeviceBL_Click);
-				Button btnRebootDeviceBootloader = this._btnRebootDeviceBootloader;
-				if (btnRebootDeviceBootloader != null)
-				{
-					btnRebootDeviceBootloader.Click -= value2;
-				}
-				this._btnRebootDeviceBootloader = value;
-				btnRebootDeviceBootloader = this._btnRebootDeviceBootloader;
-				if (btnRebootDeviceBootloader != null)
-				{
-					btnRebootDeviceBootloader.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000053 RID: 83
-		// (get) Token: 0x060001DF RID: 479 RVA: 0x00016627 File Offset: 0x00014827
-		// (set) Token: 0x060001E0 RID: 480 RVA: 0x00016634 File Offset: 0x00014834
-		internal virtual Button btnCleanVirusOffline
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnCleanVirusOffline;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnCleanVirusOffline_Click);
-				Button btnCleanVirusOffline = this._btnCleanVirusOffline;
-				if (btnCleanVirusOffline != null)
-				{
-					btnCleanVirusOffline.Click -= value2;
-				}
-				this._btnCleanVirusOffline = value;
-				btnCleanVirusOffline = this._btnCleanVirusOffline;
-				if (btnCleanVirusOffline != null)
-				{
-					btnCleanVirusOffline.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000054 RID: 84
-		// (get) Token: 0x060001E1 RID: 481 RVA: 0x00016677 File Offset: 0x00014877
-		// (set) Token: 0x060001E2 RID: 482 RVA: 0x00016684 File Offset: 0x00014884
-		internal virtual Button btnAbrirFirmwareSamsung
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnAbrirFirmwareSamsung;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnAbrirFirmwareSamsung_Click);
-				Button btnAbrirFirmwareSamsung = this._btnAbrirFirmwareSamsung;
-				if (btnAbrirFirmwareSamsung != null)
-				{
-					btnAbrirFirmwareSamsung.Click -= value2;
-				}
-				this._btnAbrirFirmwareSamsung = value;
-				btnAbrirFirmwareSamsung = this._btnAbrirFirmwareSamsung;
-				if (btnAbrirFirmwareSamsung != null)
-				{
-					btnAbrirFirmwareSamsung.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000055 RID: 85
-		// (get) Token: 0x060001E3 RID: 483 RVA: 0x000166C7 File Offset: 0x000148C7
-		// (set) Token: 0x060001E4 RID: 484 RVA: 0x000166D4 File Offset: 0x000148D4
-		internal virtual Button btnReadDwlSm
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnReadDwlSm;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnReadDwlSm_Click);
-				Button btnReadDwlSm = this._btnReadDwlSm;
-				if (btnReadDwlSm != null)
-				{
-					btnReadDwlSm.Click -= value2;
-				}
-				this._btnReadDwlSm = value;
-				btnReadDwlSm = this._btnReadDwlSm;
-				if (btnReadDwlSm != null)
-				{
-					btnReadDwlSm.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000056 RID: 86
-		// (get) Token: 0x060001E5 RID: 485 RVA: 0x00016717 File Offset: 0x00014917
-		// (set) Token: 0x060001E6 RID: 486 RVA: 0x00016724 File Offset: 0x00014924
-		internal virtual Button btnStartScrcpy
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnStartScrcpy;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnStartScrcpy_Click);
-				Button btnStartScrcpy = this._btnStartScrcpy;
-				if (btnStartScrcpy != null)
-				{
-					btnStartScrcpy.Click -= value2;
-				}
-				this._btnStartScrcpy = value;
-				btnStartScrcpy = this._btnStartScrcpy;
-				if (btnStartScrcpy != null)
-				{
-					btnStartScrcpy.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000057 RID: 87
-		// (get) Token: 0x060001E7 RID: 487 RVA: 0x00016767 File Offset: 0x00014967
-		// (set) Token: 0x060001E8 RID: 488 RVA: 0x00016774 File Offset: 0x00014974
-		internal virtual Button btnPushScrcpyServer
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnPushScrcpyServer;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnPushScrcpyServer_Click);
-				Button btnPushScrcpyServer = this._btnPushScrcpyServer;
-				if (btnPushScrcpyServer != null)
-				{
-					btnPushScrcpyServer.Click -= value2;
-				}
-				this._btnPushScrcpyServer = value;
-				btnPushScrcpyServer = this._btnPushScrcpyServer;
-				if (btnPushScrcpyServer != null)
-				{
-					btnPushScrcpyServer.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000058 RID: 88
-		// (get) Token: 0x060001E9 RID: 489 RVA: 0x000167B7 File Offset: 0x000149B7
-		// (set) Token: 0x060001EA RID: 490 RVA: 0x000167C4 File Offset: 0x000149C4
-		internal virtual Button btnRunScrcpyServer
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnRunScrcpyServer;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnRunScrcpyServer_Click);
-				Button btnRunScrcpyServer = this._btnRunScrcpyServer;
-				if (btnRunScrcpyServer != null)
-				{
-					btnRunScrcpyServer.Click -= value2;
-				}
-				this._btnRunScrcpyServer = value;
-				btnRunScrcpyServer = this._btnRunScrcpyServer;
-				if (btnRunScrcpyServer != null)
-				{
-					btnRunScrcpyServer.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000059 RID: 89
-		// (get) Token: 0x060001EB RID: 491 RVA: 0x00016807 File Offset: 0x00014A07
-		// (set) Token: 0x060001EC RID: 492 RVA: 0x00016814 File Offset: 0x00014A14
-		internal virtual Button btnTurnOffDisplay
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnTurnOffDisplay;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnTurnOffDisplay_Click);
-				Button btnTurnOffDisplay = this._btnTurnOffDisplay;
-				if (btnTurnOffDisplay != null)
-				{
-					btnTurnOffDisplay.Click -= value2;
-				}
-				this._btnTurnOffDisplay = value;
-				btnTurnOffDisplay = this._btnTurnOffDisplay;
-				if (btnTurnOffDisplay != null)
-				{
-					btnTurnOffDisplay.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700005A RID: 90
-		// (get) Token: 0x060001ED RID: 493 RVA: 0x00016857 File Offset: 0x00014A57
-		// (set) Token: 0x060001EE RID: 494 RVA: 0x00016864 File Offset: 0x00014A64
-		internal virtual Button btnTurnOffWifi
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnTurnOffWifi;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnTurnOffWifi_Click);
-				Button btnTurnOffWifi = this._btnTurnOffWifi;
-				if (btnTurnOffWifi != null)
-				{
-					btnTurnOffWifi.Click -= value2;
-				}
-				this._btnTurnOffWifi = value;
-				btnTurnOffWifi = this._btnTurnOffWifi;
-				if (btnTurnOffWifi != null)
-				{
-					btnTurnOffWifi.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700005B RID: 91
-		// (get) Token: 0x060001EF RID: 495 RVA: 0x000168A7 File Offset: 0x00014AA7
-		// (set) Token: 0x060001F0 RID: 496 RVA: 0x000168B4 File Offset: 0x00014AB4
-		internal virtual Button btnComandosShizuku
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnComandosShizuku;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnComandosShizuku_Click);
-				Button btnComandosShizuku = this._btnComandosShizuku;
-				if (btnComandosShizuku != null)
-				{
-					btnComandosShizuku.Click -= value2;
-				}
-				this._btnComandosShizuku = value;
-				btnComandosShizuku = this._btnComandosShizuku;
-				if (btnComandosShizuku != null)
-				{
-					btnComandosShizuku.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700005C RID: 92
-		// (get) Token: 0x060001F1 RID: 497 RVA: 0x000168F7 File Offset: 0x00014AF7
-		// (set) Token: 0x060001F2 RID: 498 RVA: 0x00016901 File Offset: 0x00014B01
-		internal virtual Label UserE { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x1700005D RID: 93
-		// (get) Token: 0x060001F3 RID: 499 RVA: 0x0001690A File Offset: 0x00014B0A
-		// (set) Token: 0x060001F4 RID: 500 RVA: 0x00016914 File Offset: 0x00014B14
-		internal virtual Button btnCleanMotoApps2024
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnCleanMotoApps2024;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnCleanMotoApps2024_Click);
-				Button btnCleanMotoApps = this._btnCleanMotoApps2024;
-				if (btnCleanMotoApps != null)
-				{
-					btnCleanMotoApps.Click -= value2;
-				}
-				this._btnCleanMotoApps2024 = value;
-				btnCleanMotoApps = this._btnCleanMotoApps2024;
-				if (btnCleanMotoApps != null)
-				{
-					btnCleanMotoApps.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700005E RID: 94
-		// (get) Token: 0x060001F5 RID: 501 RVA: 0x00016957 File Offset: 0x00014B57
-		// (set) Token: 0x060001F6 RID: 502 RVA: 0x00016964 File Offset: 0x00014B64
-		internal virtual Button btnSolicitarFRPIMEI
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnSolicitarFRPIMEI;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnSolicitarFRPIMEI_Click);
-				Button btnSolicitarFRPIMEI = this._btnSolicitarFRPIMEI;
-				if (btnSolicitarFRPIMEI != null)
-				{
-					btnSolicitarFRPIMEI.Click -= value2;
-				}
-				this._btnSolicitarFRPIMEI = value;
-				btnSolicitarFRPIMEI = this._btnSolicitarFRPIMEI;
-				if (btnSolicitarFRPIMEI != null)
-				{
-					btnSolicitarFRPIMEI.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700005F RID: 95
-		// (get) Token: 0x060001F7 RID: 503 RVA: 0x000169A7 File Offset: 0x00014BA7
-		// (set) Token: 0x060001F8 RID: 504 RVA: 0x000169B1 File Offset: 0x00014BB1
-		internal virtual DataGridView dgvTickets { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000060 RID: 96
-		// (get) Token: 0x060001F9 RID: 505 RVA: 0x000169BA File Offset: 0x00014BBA
-		// (set) Token: 0x060001FA RID: 506 RVA: 0x000169C4 File Offset: 0x00014BC4
-		internal virtual Label lblCreditosActuales { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000061 RID: 97
-		// (get) Token: 0x060001FB RID: 507 RVA: 0x000169CD File Offset: 0x00014BCD
-		// (set) Token: 0x060001FC RID: 508 RVA: 0x000169D7 File Offset: 0x00014BD7
-		internal virtual GroupBox grpRecargas { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000062 RID: 98
-		// (get) Token: 0x060001FD RID: 509 RVA: 0x000169E0 File Offset: 0x00014BE0
-		// (set) Token: 0x060001FE RID: 510 RVA: 0x000169EC File Offset: 0x00014BEC
-		internal virtual Button btnRecarga100
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnRecarga100;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnRecarga100_Click);
-				Button btnRecarga = this._btnRecarga100;
-				if (btnRecarga != null)
-				{
-					btnRecarga.Click -= value2;
-				}
-				this._btnRecarga100 = value;
-				btnRecarga = this._btnRecarga100;
-				if (btnRecarga != null)
-				{
-					btnRecarga.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000063 RID: 99
-		// (get) Token: 0x060001FF RID: 511 RVA: 0x00016A2F File Offset: 0x00014C2F
-		// (set) Token: 0x06000200 RID: 512 RVA: 0x00016A39 File Offset: 0x00014C39
-		internal virtual Button btnRecarga500 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000064 RID: 100
-		// (get) Token: 0x06000201 RID: 513 RVA: 0x00016A42 File Offset: 0x00014C42
-		// (set) Token: 0x06000202 RID: 514 RVA: 0x00016A4C File Offset: 0x00014C4C
-		internal virtual Button btnRecarga200
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnRecarga200;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnRecarga200_Click);
-				Button btnRecarga = this._btnRecarga200;
-				if (btnRecarga != null)
-				{
-					btnRecarga.Click -= value2;
-				}
-				this._btnRecarga200 = value;
-				btnRecarga = this._btnRecarga200;
-				if (btnRecarga != null)
-				{
-					btnRecarga.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000065 RID: 101
-		// (get) Token: 0x06000203 RID: 515 RVA: 0x00016A8F File Offset: 0x00014C8F
-		// (set) Token: 0x06000204 RID: 516 RVA: 0x00016A99 File Offset: 0x00014C99
-		internal virtual Label lb100creditos { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000066 RID: 102
-		// (get) Token: 0x06000205 RID: 517 RVA: 0x00016AA2 File Offset: 0x00014CA2
-		// (set) Token: 0x06000206 RID: 518 RVA: 0x00016AAC File Offset: 0x00014CAC
-		internal virtual Label Label3 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000067 RID: 103
-		// (get) Token: 0x06000207 RID: 519 RVA: 0x00016AB5 File Offset: 0x00014CB5
-		// (set) Token: 0x06000208 RID: 520 RVA: 0x00016ABF File Offset: 0x00014CBF
-		internal virtual Label Label4 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000068 RID: 104
-		// (get) Token: 0x06000209 RID: 521 RVA: 0x00016AC8 File Offset: 0x00014CC8
-		// (set) Token: 0x0600020A RID: 522 RVA: 0x00016AD2 File Offset: 0x00014CD2
-		internal virtual DataGridView dgvRecargas { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000069 RID: 105
-		// (get) Token: 0x0600020B RID: 523 RVA: 0x00016ADB File Offset: 0x00014CDB
-		// (set) Token: 0x0600020C RID: 524 RVA: 0x00016AE8 File Offset: 0x00014CE8
-		internal virtual Button btnVerHistorialRecargas
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnVerHistorialRecargas;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnVerHistorialRecargas_Click);
-				Button btnVerHistorialRecargas = this._btnVerHistorialRecargas;
-				if (btnVerHistorialRecargas != null)
-				{
-					btnVerHistorialRecargas.Click -= value2;
-				}
-				this._btnVerHistorialRecargas = value;
-				btnVerHistorialRecargas = this._btnVerHistorialRecargas;
-				if (btnVerHistorialRecargas != null)
-				{
-					btnVerHistorialRecargas.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700006A RID: 106
-		// (get) Token: 0x0600020D RID: 525 RVA: 0x00016B2B File Offset: 0x00014D2B
-		// (set) Token: 0x0600020E RID: 526 RVA: 0x00016B35 File Offset: 0x00014D35
-		internal virtual TabControl TicketsyCred { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x1700006B RID: 107
-		// (get) Token: 0x0600020F RID: 527 RVA: 0x00016B3E File Offset: 0x00014D3E
-		// (set) Token: 0x06000210 RID: 528 RVA: 0x00016B48 File Offset: 0x00014D48
-		internal virtual TabPage Tickets { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x1700006C RID: 108
-		// (get) Token: 0x06000211 RID: 529 RVA: 0x00016B51 File Offset: 0x00014D51
-		// (set) Token: 0x06000212 RID: 530 RVA: 0x00016B5B File Offset: 0x00014D5B
-		internal virtual TabPage HistorialRecargas { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x1700006D RID: 109
-		// (get) Token: 0x06000213 RID: 531 RVA: 0x00016B64 File Offset: 0x00014D64
-		// (set) Token: 0x06000214 RID: 532 RVA: 0x00016B70 File Offset: 0x00014D70
-		internal virtual Button btnVerTickets
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnVerTickets;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnVerTickets_Click);
-				Button btnVerTickets = this._btnVerTickets;
-				if (btnVerTickets != null)
-				{
-					btnVerTickets.Click -= value2;
-				}
-				this._btnVerTickets = value;
-				btnVerTickets = this._btnVerTickets;
-				if (btnVerTickets != null)
-				{
-					btnVerTickets.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700006E RID: 110
-		// (get) Token: 0x06000215 RID: 533 RVA: 0x00016BB3 File Offset: 0x00014DB3
-		// (set) Token: 0x06000216 RID: 534 RVA: 0x00016BC0 File Offset: 0x00014DC0
-		internal virtual Button btnGestionarCreditos
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnGestionarCreditos;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnGestionarCreditos_Click);
-				Button btnGestionarCreditos = this._btnGestionarCreditos;
-				if (btnGestionarCreditos != null)
-				{
-					btnGestionarCreditos.Click -= value2;
-				}
-				this._btnGestionarCreditos = value;
-				btnGestionarCreditos = this._btnGestionarCreditos;
-				if (btnGestionarCreditos != null)
-				{
-					btnGestionarCreditos.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700006F RID: 111
-		// (get) Token: 0x06000217 RID: 535 RVA: 0x00016C03 File Offset: 0x00014E03
-		// (set) Token: 0x06000218 RID: 536 RVA: 0x00016C10 File Offset: 0x00014E10
-		internal virtual Button btnOpenAdbAdmin
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnOpenAdbAdmin;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnAbrirGestorApps_Click);
-				Button btnOpenAdbAdmin = this._btnOpenAdbAdmin;
-				if (btnOpenAdbAdmin != null)
-				{
-					btnOpenAdbAdmin.Click -= value2;
-				}
-				this._btnOpenAdbAdmin = value;
-				btnOpenAdbAdmin = this._btnOpenAdbAdmin;
-				if (btnOpenAdbAdmin != null)
-				{
-					btnOpenAdbAdmin.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000070 RID: 112
-		// (get) Token: 0x06000219 RID: 537 RVA: 0x00016C53 File Offset: 0x00014E53
-		// (set) Token: 0x0600021A RID: 538 RVA: 0x00016C60 File Offset: 0x00014E60
-		internal virtual Button btnConsultarYEliminarVirusOnline
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnConsultarYEliminarVirusOnline;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnConsultarYEliminarVirusOnline_Click);
-				Button btnConsultarYEliminarVirusOnline = this._btnConsultarYEliminarVirusOnline;
-				if (btnConsultarYEliminarVirusOnline != null)
-				{
-					btnConsultarYEliminarVirusOnline.Click -= value2;
-				}
-				this._btnConsultarYEliminarVirusOnline = value;
-				btnConsultarYEliminarVirusOnline = this._btnConsultarYEliminarVirusOnline;
-				if (btnConsultarYEliminarVirusOnline != null)
-				{
-					btnConsultarYEliminarVirusOnline.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000071 RID: 113
-		// (get) Token: 0x0600021B RID: 539 RVA: 0x00016CA3 File Offset: 0x00014EA3
-		// (set) Token: 0x0600021C RID: 540 RVA: 0x00016CB0 File Offset: 0x00014EB0
-		internal virtual Button btnConsultarKoodousPorHash
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnConsultarKoodousPorHash;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnConsultarKoodousPorHash_Click);
-				Button btnConsultarKoodousPorHash = this._btnConsultarKoodousPorHash;
-				if (btnConsultarKoodousPorHash != null)
-				{
-					btnConsultarKoodousPorHash.Click -= value2;
-				}
-				this._btnConsultarKoodousPorHash = value;
-				btnConsultarKoodousPorHash = this._btnConsultarKoodousPorHash;
-				if (btnConsultarKoodousPorHash != null)
-				{
-					btnConsultarKoodousPorHash.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000072 RID: 114
-		// (get) Token: 0x0600021D RID: 541 RVA: 0x00016CF3 File Offset: 0x00014EF3
-		// (set) Token: 0x0600021E RID: 542 RVA: 0x00016D00 File Offset: 0x00014F00
-		internal virtual Button btnConsultarVirusOnlineSolo
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnConsultarVirusOnlineSolo;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnConsultarVirusOnlineSolo_Click);
-				Button btnConsultarVirusOnlineSolo = this._btnConsultarVirusOnlineSolo;
-				if (btnConsultarVirusOnlineSolo != null)
-				{
-					btnConsultarVirusOnlineSolo.Click -= value2;
-				}
-				this._btnConsultarVirusOnlineSolo = value;
-				btnConsultarVirusOnlineSolo = this._btnConsultarVirusOnlineSolo;
-				if (btnConsultarVirusOnlineSolo != null)
-				{
-					btnConsultarVirusOnlineSolo.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000073 RID: 115
-		// (get) Token: 0x0600021F RID: 543 RVA: 0x00016D43 File Offset: 0x00014F43
-		// (set) Token: 0x06000220 RID: 544 RVA: 0x00016D4D File Offset: 0x00014F4D
-		internal virtual RichTextBox txtOutput { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000074 RID: 116
-		// (get) Token: 0x06000221 RID: 545 RVA: 0x00016D56 File Offset: 0x00014F56
-		// (set) Token: 0x06000222 RID: 546 RVA: 0x00016D60 File Offset: 0x00014F60
-		internal virtual CheckBox chkSoloDesactivar { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000075 RID: 117
-		// (get) Token: 0x06000223 RID: 547 RVA: 0x00016D69 File Offset: 0x00014F69
-		// (set) Token: 0x06000224 RID: 548 RVA: 0x00016D74 File Offset: 0x00014F74
-		internal virtual Button btnRevisarKaspersky
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnRevisarKaspersky;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnRevisarKaspersky_Click);
-				Button btnRevisarKaspersky = this._btnRevisarKaspersky;
-				if (btnRevisarKaspersky != null)
-				{
-					btnRevisarKaspersky.Click -= value2;
-				}
-				this._btnRevisarKaspersky = value;
-				btnRevisarKaspersky = this._btnRevisarKaspersky;
-				if (btnRevisarKaspersky != null)
-				{
-					btnRevisarKaspersky.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000076 RID: 118
-		// (get) Token: 0x06000225 RID: 549 RVA: 0x00016DB7 File Offset: 0x00014FB7
-		// (set) Token: 0x06000226 RID: 550 RVA: 0x00016DC1 File Offset: 0x00014FC1
-		internal virtual Button btnDriversRk { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000077 RID: 119
-		// (get) Token: 0x06000227 RID: 551 RVA: 0x00016DCA File Offset: 0x00014FCA
-		// (set) Token: 0x06000228 RID: 552 RVA: 0x00016DD4 File Offset: 0x00014FD4
-		internal virtual Button btnRkchip
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnRkchip;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnRkchip_Click);
-				Button btnRkchip = this._btnRkchip;
-				if (btnRkchip != null)
-				{
-					btnRkchip.Click -= value2;
-				}
-				this._btnRkchip = value;
-				btnRkchip = this._btnRkchip;
-				if (btnRkchip != null)
-				{
-					btnRkchip.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000078 RID: 120
-		// (get) Token: 0x06000229 RID: 553 RVA: 0x00016E17 File Offset: 0x00015017
-		// (set) Token: 0x0600022A RID: 554 RVA: 0x00016E24 File Offset: 0x00015024
-		internal virtual Button btndrivershonor
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btndrivershonor;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btndrivershonor_Click);
-				Button btndrivershonor = this._btndrivershonor;
-				if (btndrivershonor != null)
-				{
-					btndrivershonor.Click -= value2;
-				}
-				this._btndrivershonor = value;
-				btndrivershonor = this._btndrivershonor;
-				if (btndrivershonor != null)
-				{
-					btndrivershonor.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000079 RID: 121
-		// (get) Token: 0x0600022B RID: 555 RVA: 0x00016E67 File Offset: 0x00015067
-		// (set) Token: 0x0600022C RID: 556 RVA: 0x00016E71 File Offset: 0x00015071
-		internal virtual SplitContainer SplitContainerLog { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x1700007A RID: 122
-		// (get) Token: 0x0600022D RID: 557 RVA: 0x00016E7A File Offset: 0x0001507A
-		// (set) Token: 0x0600022E RID: 558 RVA: 0x00016E84 File Offset: 0x00015084
-		internal virtual Button btnSolicitarFRPv1
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnSolicitarFRPv1;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnSolicitarFRPv1_Click);
-				Button btnSolicitarFRPv = this._btnSolicitarFRPv1;
-				if (btnSolicitarFRPv != null)
-				{
-					btnSolicitarFRPv.Click -= value2;
-				}
-				this._btnSolicitarFRPv1 = value;
-				btnSolicitarFRPv = this._btnSolicitarFRPv1;
-				if (btnSolicitarFRPv != null)
-				{
-					btnSolicitarFRPv.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700007B RID: 123
-		// (get) Token: 0x0600022F RID: 559 RVA: 0x00016EC7 File Offset: 0x000150C7
-		// (set) Token: 0x06000230 RID: 560 RVA: 0x00016ED1 File Offset: 0x000150D1
-		internal virtual FlowLayoutPanel FlowLayoutPanel1 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x1700007C RID: 124
-		// (get) Token: 0x06000231 RID: 561 RVA: 0x00016EDA File Offset: 0x000150DA
-		// (set) Token: 0x06000232 RID: 562 RVA: 0x00016EE4 File Offset: 0x000150E4
-		internal virtual FlowLayoutPanel FlowLayoutPanel2 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x1700007D RID: 125
-		// (get) Token: 0x06000233 RID: 563 RVA: 0x00016EED File Offset: 0x000150ED
-		// (set) Token: 0x06000234 RID: 564 RVA: 0x00016EF7 File Offset: 0x000150F7
-		internal virtual FlowLayoutPanel FlowLayoutPanel3 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x1700007E RID: 126
-		// (get) Token: 0x06000235 RID: 565 RVA: 0x00016F00 File Offset: 0x00015100
-		// (set) Token: 0x06000236 RID: 566 RVA: 0x00016F0C File Offset: 0x0001510C
-		internal virtual Button btnSolicitarLicenciaporWhats
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnSolicitarLicenciaporWhats;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnSolicitarLicenciaporWhats_Click);
-				Button btnSolicitarLicenciaporWhats = this._btnSolicitarLicenciaporWhats;
-				if (btnSolicitarLicenciaporWhats != null)
-				{
-					btnSolicitarLicenciaporWhats.Click -= value2;
-				}
-				this._btnSolicitarLicenciaporWhats = value;
-				btnSolicitarLicenciaporWhats = this._btnSolicitarLicenciaporWhats;
-				if (btnSolicitarLicenciaporWhats != null)
-				{
-					btnSolicitarLicenciaporWhats.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700007F RID: 127
-		// (get) Token: 0x06000237 RID: 567 RVA: 0x00016F4F File Offset: 0x0001514F
-		// (set) Token: 0x06000238 RID: 568 RVA: 0x00016F59 File Offset: 0x00015159
-		internal virtual FlowLayoutPanel FlowLayoutPanel5 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000080 RID: 128
-		// (get) Token: 0x06000239 RID: 569 RVA: 0x00016F62 File Offset: 0x00015162
-		// (set) Token: 0x0600023A RID: 570 RVA: 0x00016F6C File Offset: 0x0001516C
-		internal virtual FlowLayoutPanel FlowLayoutPanel4 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000081 RID: 129
-		// (get) Token: 0x0600023B RID: 571 RVA: 0x00016F75 File Offset: 0x00015175
-		// (set) Token: 0x0600023C RID: 572 RVA: 0x00016F7F File Offset: 0x0001517F
-		internal virtual FlowLayoutPanel FlowLayoutPanel6 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000082 RID: 130
-		// (get) Token: 0x0600023D RID: 573 RVA: 0x00016F88 File Offset: 0x00015188
-		// (set) Token: 0x0600023E RID: 574 RVA: 0x00016F92 File Offset: 0x00015192
-		internal virtual FlowLayoutPanel FlowLayoutPanel7 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000083 RID: 131
-		// (get) Token: 0x0600023F RID: 575 RVA: 0x00016F9B File Offset: 0x0001519B
-		// (set) Token: 0x06000240 RID: 576 RVA: 0x00016FA5 File Offset: 0x000151A5
-		internal virtual Label Label5 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000084 RID: 132
-		// (get) Token: 0x06000241 RID: 577 RVA: 0x00016FAE File Offset: 0x000151AE
-		// (set) Token: 0x06000242 RID: 578 RVA: 0x00016FB8 File Offset: 0x000151B8
-		internal virtual FlowLayoutPanel FlowLayoutPanel8 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000085 RID: 133
-		// (get) Token: 0x06000243 RID: 579 RVA: 0x00016FC1 File Offset: 0x000151C1
-		// (set) Token: 0x06000244 RID: 580 RVA: 0x00016FCB File Offset: 0x000151CB
-		internal virtual FlowLayoutPanel FlowLayoutPanel9 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000086 RID: 134
-		// (get) Token: 0x06000245 RID: 581 RVA: 0x00016FD4 File Offset: 0x000151D4
-		// (set) Token: 0x06000246 RID: 582 RVA: 0x00016FDE File Offset: 0x000151DE
-		internal virtual FlowLayoutPanel FlowLayoutPanel10 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000087 RID: 135
-		// (get) Token: 0x06000247 RID: 583 RVA: 0x00016FE7 File Offset: 0x000151E7
-		// (set) Token: 0x06000248 RID: 584 RVA: 0x00016FF1 File Offset: 0x000151F1
-		internal virtual FlowLayoutPanel FlowLayoutPanel11 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000088 RID: 136
-		// (get) Token: 0x06000249 RID: 585 RVA: 0x00016FFA File Offset: 0x000151FA
-		// (set) Token: 0x0600024A RID: 586 RVA: 0x00017004 File Offset: 0x00015204
-		internal virtual Button ActivarAdbMotorola { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000089 RID: 137
-		// (get) Token: 0x0600024B RID: 587 RVA: 0x0001700D File Offset: 0x0001520D
-		// (set) Token: 0x0600024C RID: 588 RVA: 0x00017018 File Offset: 0x00015218
-		internal virtual Button btnCancelarProceso
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnCancelarProceso;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnCancelarProceso_Click);
-				Button btnCancelarProceso = this._btnCancelarProceso;
-				if (btnCancelarProceso != null)
-				{
-					btnCancelarProceso.Click -= value2;
-				}
-				this._btnCancelarProceso = value;
-				btnCancelarProceso = this._btnCancelarProceso;
-				if (btnCancelarProceso != null)
-				{
-					btnCancelarProceso.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700008A RID: 138
-		// (get) Token: 0x0600024D RID: 589 RVA: 0x0001705B File Offset: 0x0001525B
-		// (set) Token: 0x0600024E RID: 590 RVA: 0x00017068 File Offset: 0x00015268
-		internal virtual Button btnFlashSamsung
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnFlashSamsung;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnFlashSamsung_Click);
-				Button btnFlashSamsung = this._btnFlashSamsung;
-				if (btnFlashSamsung != null)
-				{
-					btnFlashSamsung.Click -= value2;
-				}
-				this._btnFlashSamsung = value;
-				btnFlashSamsung = this._btnFlashSamsung;
-				if (btnFlashSamsung != null)
-				{
-					btnFlashSamsung.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700008B RID: 139
-		// (get) Token: 0x0600024F RID: 591 RVA: 0x000170AB File Offset: 0x000152AB
-		// (set) Token: 0x06000250 RID: 592 RVA: 0x000170B8 File Offset: 0x000152B8
-		internal virtual Button btnDisableUpdatePixel
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnDisableUpdatePixel;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnDisableUpdatePixel_Click);
-				Button btnDisableUpdatePixel = this._btnDisableUpdatePixel;
-				if (btnDisableUpdatePixel != null)
-				{
-					btnDisableUpdatePixel.Click -= value2;
-				}
-				this._btnDisableUpdatePixel = value;
-				btnDisableUpdatePixel = this._btnDisableUpdatePixel;
-				if (btnDisableUpdatePixel != null)
-				{
-					btnDisableUpdatePixel.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700008C RID: 140
-		// (get) Token: 0x06000251 RID: 593 RVA: 0x000170FB File Offset: 0x000152FB
-		// (set) Token: 0x06000252 RID: 594 RVA: 0x00017108 File Offset: 0x00015308
-		internal virtual Button btnUnlockTMobile
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnUnlockTMobile;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnUnlockTMobile_Click);
-				Button btnUnlockTMobile = this._btnUnlockTMobile;
-				if (btnUnlockTMobile != null)
-				{
-					btnUnlockTMobile.Click -= value2;
-				}
-				this._btnUnlockTMobile = value;
-				btnUnlockTMobile = this._btnUnlockTMobile;
-				if (btnUnlockTMobile != null)
-				{
-					btnUnlockTMobile.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700008D RID: 141
-		// (get) Token: 0x06000253 RID: 595 RVA: 0x0001714B File Offset: 0x0001534B
-		// (set) Token: 0x06000254 RID: 596 RVA: 0x00017158 File Offset: 0x00015358
-		internal virtual Button btnWipeFastbootHonor
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnWipeFastbootHonor;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnWipeFastbootHonor_Click);
-				Button btnWipeFastbootHonor = this._btnWipeFastbootHonor;
-				if (btnWipeFastbootHonor != null)
-				{
-					btnWipeFastbootHonor.Click -= value2;
-				}
-				this._btnWipeFastbootHonor = value;
-				btnWipeFastbootHonor = this._btnWipeFastbootHonor;
-				if (btnWipeFastbootHonor != null)
-				{
-					btnWipeFastbootHonor.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700008E RID: 142
-		// (get) Token: 0x06000255 RID: 597 RVA: 0x0001719B File Offset: 0x0001539B
-		// (set) Token: 0x06000256 RID: 598 RVA: 0x000171A8 File Offset: 0x000153A8
-		internal virtual Button btnOpenFileHxd
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnOpenFileHxd;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnOpenFileHxd_Click);
-				Button btnOpenFileHxd = this._btnOpenFileHxd;
-				if (btnOpenFileHxd != null)
-				{
-					btnOpenFileHxd.Click -= value2;
-				}
-				this._btnOpenFileHxd = value;
-				btnOpenFileHxd = this._btnOpenFileHxd;
-				if (btnOpenFileHxd != null)
-				{
-					btnOpenFileHxd.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x1700008F RID: 143
-		// (get) Token: 0x06000257 RID: 599 RVA: 0x000171EB File Offset: 0x000153EB
-		// (set) Token: 0x06000258 RID: 600 RVA: 0x000171F8 File Offset: 0x000153F8
-		internal virtual Button btnXiaomiBypassv1
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnXiaomiBypassv1;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnXiaomiBypassv1_Click);
-				Button btnXiaomiBypassv = this._btnXiaomiBypassv1;
-				if (btnXiaomiBypassv != null)
-				{
-					btnXiaomiBypassv.Click -= value2;
-				}
-				this._btnXiaomiBypassv1 = value;
-				btnXiaomiBypassv = this._btnXiaomiBypassv1;
-				if (btnXiaomiBypassv != null)
-				{
-					btnXiaomiBypassv.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000090 RID: 144
-		// (get) Token: 0x06000259 RID: 601 RVA: 0x0001723B File Offset: 0x0001543B
-		// (set) Token: 0x0600025A RID: 602 RVA: 0x00017248 File Offset: 0x00015448
-		internal virtual Button btnXiaomiBypassv2
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnXiaomiBypassv2;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnXiaomiBypassv2_Click);
-				Button btnXiaomiBypassv = this._btnXiaomiBypassv2;
-				if (btnXiaomiBypassv != null)
-				{
-					btnXiaomiBypassv.Click -= value2;
-				}
-				this._btnXiaomiBypassv2 = value;
-				btnXiaomiBypassv = this._btnXiaomiBypassv2;
-				if (btnXiaomiBypassv != null)
-				{
-					btnXiaomiBypassv.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000091 RID: 145
-		// (get) Token: 0x0600025B RID: 603 RVA: 0x0001728B File Offset: 0x0001548B
-		// (set) Token: 0x0600025C RID: 604 RVA: 0x00017298 File Offset: 0x00015498
-		internal virtual Button btnProcesoHonorItv1
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnProcesoHonorItv1;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnProcesoHonorItv1_Click);
-				Button btnProcesoHonorItv = this._btnProcesoHonorItv1;
-				if (btnProcesoHonorItv != null)
-				{
-					btnProcesoHonorItv.Click -= value2;
-				}
-				this._btnProcesoHonorItv1 = value;
-				btnProcesoHonorItv = this._btnProcesoHonorItv1;
-				if (btnProcesoHonorItv != null)
-				{
-					btnProcesoHonorItv.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000092 RID: 146
-		// (get) Token: 0x0600025D RID: 605 RVA: 0x000172DB File Offset: 0x000154DB
-		// (set) Token: 0x0600025E RID: 606 RVA: 0x000172E5 File Offset: 0x000154E5
-		internal virtual TabPage Remoto { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000093 RID: 147
-		// (get) Token: 0x0600025F RID: 607 RVA: 0x000172EE File Offset: 0x000154EE
-		// (set) Token: 0x06000260 RID: 608 RVA: 0x000172F8 File Offset: 0x000154F8
-		internal virtual FlowLayoutPanel FlowLayoutPanel12 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000094 RID: 148
-		// (get) Token: 0x06000261 RID: 609 RVA: 0x00017301 File Offset: 0x00015501
-		// (set) Token: 0x06000262 RID: 610 RVA: 0x0001730C File Offset: 0x0001550C
-		internal virtual Button btnUsbRedirectorV2
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnUsbRedirectorV2;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnUsbRedirectorV2_Click);
-				Button btnUsbRedirectorV = this._btnUsbRedirectorV2;
-				if (btnUsbRedirectorV != null)
-				{
-					btnUsbRedirectorV.Click -= value2;
-				}
-				this._btnUsbRedirectorV2 = value;
-				btnUsbRedirectorV = this._btnUsbRedirectorV2;
-				if (btnUsbRedirectorV != null)
-				{
-					btnUsbRedirectorV.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000095 RID: 149
-		// (get) Token: 0x06000263 RID: 611 RVA: 0x0001734F File Offset: 0x0001554F
-		// (set) Token: 0x06000264 RID: 612 RVA: 0x0001735C File Offset: 0x0001555C
-		internal virtual Button btnanydesk
-		{
-			[CompilerGenerated]
-			get
-			{
-				return this._btnanydesk;
-			}
-			[CompilerGenerated]
-			[MethodImpl(MethodImplOptions.Synchronized)]
-			set
-			{
-				EventHandler value2 = new EventHandler(this.btnanydesk_Click);
-				Button btnanydesk = this._btnanydesk;
-				if (btnanydesk != null)
-				{
-					btnanydesk.Click -= value2;
-				}
-				this._btnanydesk = value;
-				btnanydesk = this._btnanydesk;
-				if (btnanydesk != null)
-				{
-					btnanydesk.Click += value2;
-				}
-			}
-		}
-
-		// Token: 0x17000096 RID: 150
-		// (get) Token: 0x06000265 RID: 613 RVA: 0x0001739F File Offset: 0x0001559F
-		// (set) Token: 0x06000266 RID: 614 RVA: 0x000173AC File Offset: 0x000155AC
+		// Token: 0x17000041 RID: 65
+		// (get) Token: 0x06000195 RID: 405 RVA: 0x00013EFB File Offset: 0x000120FB
+		// (set) Token: 0x06000196 RID: 406 RVA: 0x00013F05 File Offset: 0x00012105
+		internal virtual TabPage TabPage1 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000042 RID: 66
+		// (get) Token: 0x06000197 RID: 407 RVA: 0x00013F0E File Offset: 0x0001210E
+		// (set) Token: 0x06000198 RID: 408 RVA: 0x00013F18 File Offset: 0x00012118
 		internal virtual Button btnwipefastbootmt
 		{
 			[CompilerGenerated]
@@ -18087,213 +13665,1504 @@ namespace Tstool
 			}
 		}
 
-		// Token: 0x17000097 RID: 151
-		// (get) Token: 0x06000267 RID: 615 RVA: 0x000173EF File Offset: 0x000155EF
-		// (set) Token: 0x06000268 RID: 616 RVA: 0x000173F9 File Offset: 0x000155F9
-		internal virtual Label lblStatus { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
-
-		// Token: 0x17000098 RID: 152
-		// (get) Token: 0x06000269 RID: 617 RVA: 0x00017402 File Offset: 0x00015602
-		// (set) Token: 0x0600026A RID: 618 RVA: 0x0001740C File Offset: 0x0001560C
-		internal virtual Button btnHonorfullv1
+		// Token: 0x17000043 RID: 67
+		// (get) Token: 0x06000199 RID: 409 RVA: 0x00013F5B File Offset: 0x0001215B
+		// (set) Token: 0x0600019A RID: 410 RVA: 0x00013F68 File Offset: 0x00012168
+		internal virtual Button btnfu
 		{
 			[CompilerGenerated]
 			get
 			{
-				return this._btnHonorfullv1;
+				return this._btnfu;
 			}
 			[CompilerGenerated]
 			[MethodImpl(MethodImplOptions.Synchronized)]
 			set
 			{
-				EventHandler value2 = new EventHandler(this.btnHonorfullv1_Click);
-				Button btnHonorfullv = this._btnHonorfullv1;
-				if (btnHonorfullv != null)
+				EventHandler value2 = new EventHandler(this.btnfu_Click);
+				Button btnfu = this._btnfu;
+				if (btnfu != null)
 				{
-					btnHonorfullv.Click -= value2;
+					btnfu.Click -= value2;
 				}
-				this._btnHonorfullv1 = value;
-				btnHonorfullv = this._btnHonorfullv1;
-				if (btnHonorfullv != null)
+				this._btnfu = value;
+				btnfu = this._btnfu;
+				if (btnfu != null)
 				{
-					btnHonorfullv.Click += value2;
+					btnfu.Click += value2;
 				}
 			}
 		}
 
-		// Token: 0x17000099 RID: 153
-		// (get) Token: 0x0600026B RID: 619 RVA: 0x0001744F File Offset: 0x0001564F
-		// (set) Token: 0x0600026C RID: 620 RVA: 0x0001745C File Offset: 0x0001565C
-		internal virtual Button btnservices
+		// Token: 0x17000044 RID: 68
+		// (get) Token: 0x0600019B RID: 411 RVA: 0x00013FAB File Offset: 0x000121AB
+		// (set) Token: 0x0600019C RID: 412 RVA: 0x00013FB8 File Offset: 0x000121B8
+		internal virtual Button btnfacto
 		{
 			[CompilerGenerated]
 			get
 			{
-				return this._btnservices;
+				return this._btnfacto;
 			}
 			[CompilerGenerated]
 			[MethodImpl(MethodImplOptions.Synchronized)]
 			set
 			{
-				EventHandler value2 = new EventHandler(this.btnservices_Click);
-				Button btnservices = this._btnservices;
-				if (btnservices != null)
+				EventHandler value2 = new EventHandler(this.btnfacto_Click);
+				Button btnfacto = this._btnfacto;
+				if (btnfacto != null)
 				{
-					btnservices.Click -= value2;
+					btnfacto.Click -= value2;
 				}
-				this._btnservices = value;
-				btnservices = this._btnservices;
-				if (btnservices != null)
+				this._btnfacto = value;
+				btnfacto = this._btnfacto;
+				if (btnfacto != null)
 				{
-					btnservices.Click += value2;
+					btnfacto.Click += value2;
 				}
 			}
 		}
 
-		// Token: 0x1700009A RID: 154
-		// (get) Token: 0x0600026D RID: 621 RVA: 0x0001749F File Offset: 0x0001569F
-		// (set) Token: 0x0600026E RID: 622 RVA: 0x000174AC File Offset: 0x000156AC
-		internal virtual Button btnUnlockBootloader
+		// Token: 0x17000045 RID: 69
+		// (get) Token: 0x0600019D RID: 413 RVA: 0x00013FFB File Offset: 0x000121FB
+		// (set) Token: 0x0600019E RID: 414 RVA: 0x00014008 File Offset: 0x00012208
+		internal virtual Button btnKgNew
 		{
 			[CompilerGenerated]
 			get
 			{
-				return this._btnUnlockBootloader;
+				return this._btnKgNew;
 			}
 			[CompilerGenerated]
 			[MethodImpl(MethodImplOptions.Synchronized)]
 			set
 			{
-				EventHandler value2 = new EventHandler(this.btnUnlockBootloader_Click);
-				Button btnUnlockBootloader = this._btnUnlockBootloader;
-				if (btnUnlockBootloader != null)
+				EventHandler value2 = new EventHandler(this.btnKgNew_Click);
+				Button btnKgNew = this._btnKgNew;
+				if (btnKgNew != null)
 				{
-					btnUnlockBootloader.Click -= value2;
+					btnKgNew.Click -= value2;
 				}
-				this._btnUnlockBootloader = value;
-				btnUnlockBootloader = this._btnUnlockBootloader;
-				if (btnUnlockBootloader != null)
+				this._btnKgNew = value;
+				btnKgNew = this._btnKgNew;
+				if (btnKgNew != null)
 				{
-					btnUnlockBootloader.Click += value2;
+					btnKgNew.Click += value2;
 				}
 			}
 		}
 
-		// Token: 0x1700009B RID: 155
-		// (get) Token: 0x0600026F RID: 623 RVA: 0x000174EF File Offset: 0x000156EF
-		// (set) Token: 0x06000270 RID: 624 RVA: 0x000174FC File Offset: 0x000156FC
-		internal virtual Button btnOpenSettings
+		// Token: 0x17000046 RID: 70
+		// (get) Token: 0x0600019F RID: 415 RVA: 0x0001404B File Offset: 0x0001224B
+		// (set) Token: 0x060001A0 RID: 416 RVA: 0x00014058 File Offset: 0x00012258
+		internal virtual Button btnkglocktoactive
 		{
 			[CompilerGenerated]
 			get
 			{
-				return this._btnOpenSettings;
+				return this._btnkglocktoactive;
 			}
 			[CompilerGenerated]
 			[MethodImpl(MethodImplOptions.Synchronized)]
 			set
 			{
-				EventHandler value2 = new EventHandler(this.btnOpenSettings_Click);
-				Button btnOpenSettings = this._btnOpenSettings;
-				if (btnOpenSettings != null)
+				EventHandler value2 = new EventHandler(this.btnkglocktoactive_Click);
+				Button btnkglocktoactive = this._btnkglocktoactive;
+				if (btnkglocktoactive != null)
 				{
-					btnOpenSettings.Click -= value2;
+					btnkglocktoactive.Click -= value2;
 				}
-				this._btnOpenSettings = value;
-				btnOpenSettings = this._btnOpenSettings;
-				if (btnOpenSettings != null)
+				this._btnkglocktoactive = value;
+				btnkglocktoactive = this._btnkglocktoactive;
+				if (btnkglocktoactive != null)
 				{
-					btnOpenSettings.Click += value2;
+					btnkglocktoactive.Click += value2;
 				}
 			}
 		}
 
-		// Token: 0x0400000F RID: 15
+		// Token: 0x17000047 RID: 71
+		// (get) Token: 0x060001A1 RID: 417 RVA: 0x0001409B File Offset: 0x0001229B
+		// (set) Token: 0x060001A2 RID: 418 RVA: 0x000140A8 File Offset: 0x000122A8
+		internal virtual Button BtnUnlockPixel
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._BtnUnlockPixel;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnUnlockPixel_Click);
+				Button btnUnlockPixel = this._BtnUnlockPixel;
+				if (btnUnlockPixel != null)
+				{
+					btnUnlockPixel.Click -= value2;
+				}
+				this._BtnUnlockPixel = value;
+				btnUnlockPixel = this._BtnUnlockPixel;
+				if (btnUnlockPixel != null)
+				{
+					btnUnlockPixel.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000048 RID: 72
+		// (get) Token: 0x060001A3 RID: 419 RVA: 0x000140EB File Offset: 0x000122EB
+		// (set) Token: 0x060001A4 RID: 420 RVA: 0x000140F8 File Offset: 0x000122F8
+		internal virtual Button btnCleanMDMApps
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnCleanMDMApps;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnCleanMDMApps_Click);
+				Button btnCleanMDMApps = this._btnCleanMDMApps;
+				if (btnCleanMDMApps != null)
+				{
+					btnCleanMDMApps.Click -= value2;
+				}
+				this._btnCleanMDMApps = value;
+				btnCleanMDMApps = this._btnCleanMDMApps;
+				if (btnCleanMDMApps != null)
+				{
+					btnCleanMDMApps.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000049 RID: 73
+		// (get) Token: 0x060001A5 RID: 421 RVA: 0x0001413B File Offset: 0x0001233B
+		// (set) Token: 0x060001A6 RID: 422 RVA: 0x00014148 File Offset: 0x00012348
+		internal virtual Button btnRebootDevice
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnRebootDevice;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnRebootDevice_Click);
+				Button btnRebootDevice = this._btnRebootDevice;
+				if (btnRebootDevice != null)
+				{
+					btnRebootDevice.Click -= value2;
+				}
+				this._btnRebootDevice = value;
+				btnRebootDevice = this._btnRebootDevice;
+				if (btnRebootDevice != null)
+				{
+					btnRebootDevice.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700004A RID: 74
+		// (get) Token: 0x060001A7 RID: 423 RVA: 0x0001418B File Offset: 0x0001238B
+		// (set) Token: 0x060001A8 RID: 424 RVA: 0x00014198 File Offset: 0x00012398
+		internal virtual Button btnRebootRecovery
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnRebootRecovery;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnRebootRecovery_Click);
+				Button btnRebootRecovery = this._btnRebootRecovery;
+				if (btnRebootRecovery != null)
+				{
+					btnRebootRecovery.Click -= value2;
+				}
+				this._btnRebootRecovery = value;
+				btnRebootRecovery = this._btnRebootRecovery;
+				if (btnRebootRecovery != null)
+				{
+					btnRebootRecovery.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700004B RID: 75
+		// (get) Token: 0x060001A9 RID: 425 RVA: 0x000141DB File Offset: 0x000123DB
+		// (set) Token: 0x060001AA RID: 426 RVA: 0x000141E8 File Offset: 0x000123E8
+		internal virtual Button btnCheckVirusOffline
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnCheckVirusOffline;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnCheckVirusOffline_Click);
+				Button btnCheckVirusOffline = this._btnCheckVirusOffline;
+				if (btnCheckVirusOffline != null)
+				{
+					btnCheckVirusOffline.Click -= value2;
+				}
+				this._btnCheckVirusOffline = value;
+				btnCheckVirusOffline = this._btnCheckVirusOffline;
+				if (btnCheckVirusOffline != null)
+				{
+					btnCheckVirusOffline.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700004C RID: 76
+		// (get) Token: 0x060001AB RID: 427 RVA: 0x0001422B File Offset: 0x0001242B
+		// (set) Token: 0x060001AC RID: 428 RVA: 0x00014238 File Offset: 0x00012438
+		internal virtual Button btnReadHuaweiInfo
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnReadHuaweiInfo;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnReadHuaweiInfo_Click);
+				Button btnReadHuaweiInfo = this._btnReadHuaweiInfo;
+				if (btnReadHuaweiInfo != null)
+				{
+					btnReadHuaweiInfo.Click -= value2;
+				}
+				this._btnReadHuaweiInfo = value;
+				btnReadHuaweiInfo = this._btnReadHuaweiInfo;
+				if (btnReadHuaweiInfo != null)
+				{
+					btnReadHuaweiInfo.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700004D RID: 77
+		// (get) Token: 0x060001AD RID: 429 RVA: 0x0001427B File Offset: 0x0001247B
+		// (set) Token: 0x060001AE RID: 430 RVA: 0x00014288 File Offset: 0x00012488
+		internal virtual Button btnRebootDeviceBootloader
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnRebootDeviceBootloader;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnRebootDeviceBL_Click);
+				Button btnRebootDeviceBootloader = this._btnRebootDeviceBootloader;
+				if (btnRebootDeviceBootloader != null)
+				{
+					btnRebootDeviceBootloader.Click -= value2;
+				}
+				this._btnRebootDeviceBootloader = value;
+				btnRebootDeviceBootloader = this._btnRebootDeviceBootloader;
+				if (btnRebootDeviceBootloader != null)
+				{
+					btnRebootDeviceBootloader.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700004E RID: 78
+		// (get) Token: 0x060001AF RID: 431 RVA: 0x000142CB File Offset: 0x000124CB
+		// (set) Token: 0x060001B0 RID: 432 RVA: 0x000142D8 File Offset: 0x000124D8
+		internal virtual Button btnCleanVirusOffline
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnCleanVirusOffline;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnCleanVirusOffline_Click);
+				Button btnCleanVirusOffline = this._btnCleanVirusOffline;
+				if (btnCleanVirusOffline != null)
+				{
+					btnCleanVirusOffline.Click -= value2;
+				}
+				this._btnCleanVirusOffline = value;
+				btnCleanVirusOffline = this._btnCleanVirusOffline;
+				if (btnCleanVirusOffline != null)
+				{
+					btnCleanVirusOffline.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700004F RID: 79
+		// (get) Token: 0x060001B1 RID: 433 RVA: 0x0001431B File Offset: 0x0001251B
+		// (set) Token: 0x060001B2 RID: 434 RVA: 0x00014328 File Offset: 0x00012528
+		internal virtual Button btnAbrirFirmwareSamsung
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnAbrirFirmwareSamsung;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnAbrirFirmwareSamsung_Click);
+				Button btnAbrirFirmwareSamsung = this._btnAbrirFirmwareSamsung;
+				if (btnAbrirFirmwareSamsung != null)
+				{
+					btnAbrirFirmwareSamsung.Click -= value2;
+				}
+				this._btnAbrirFirmwareSamsung = value;
+				btnAbrirFirmwareSamsung = this._btnAbrirFirmwareSamsung;
+				if (btnAbrirFirmwareSamsung != null)
+				{
+					btnAbrirFirmwareSamsung.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000050 RID: 80
+		// (get) Token: 0x060001B3 RID: 435 RVA: 0x0001436B File Offset: 0x0001256B
+		// (set) Token: 0x060001B4 RID: 436 RVA: 0x00014378 File Offset: 0x00012578
+		internal virtual Button btnReadDwlSm
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnReadDwlSm;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnReadDwlSm_Click);
+				Button btnReadDwlSm = this._btnReadDwlSm;
+				if (btnReadDwlSm != null)
+				{
+					btnReadDwlSm.Click -= value2;
+				}
+				this._btnReadDwlSm = value;
+				btnReadDwlSm = this._btnReadDwlSm;
+				if (btnReadDwlSm != null)
+				{
+					btnReadDwlSm.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000051 RID: 81
+		// (get) Token: 0x060001B5 RID: 437 RVA: 0x000143BB File Offset: 0x000125BB
+		// (set) Token: 0x060001B6 RID: 438 RVA: 0x000143C8 File Offset: 0x000125C8
+		internal virtual Button btnStartScrcpy
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnStartScrcpy;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnStartScrcpy_Click);
+				Button btnStartScrcpy = this._btnStartScrcpy;
+				if (btnStartScrcpy != null)
+				{
+					btnStartScrcpy.Click -= value2;
+				}
+				this._btnStartScrcpy = value;
+				btnStartScrcpy = this._btnStartScrcpy;
+				if (btnStartScrcpy != null)
+				{
+					btnStartScrcpy.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000052 RID: 82
+		// (get) Token: 0x060001B7 RID: 439 RVA: 0x0001440B File Offset: 0x0001260B
+		// (set) Token: 0x060001B8 RID: 440 RVA: 0x00014418 File Offset: 0x00012618
+		internal virtual Button btnPushScrcpyServer
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnPushScrcpyServer;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnPushScrcpyServer_Click);
+				Button btnPushScrcpyServer = this._btnPushScrcpyServer;
+				if (btnPushScrcpyServer != null)
+				{
+					btnPushScrcpyServer.Click -= value2;
+				}
+				this._btnPushScrcpyServer = value;
+				btnPushScrcpyServer = this._btnPushScrcpyServer;
+				if (btnPushScrcpyServer != null)
+				{
+					btnPushScrcpyServer.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000053 RID: 83
+		// (get) Token: 0x060001B9 RID: 441 RVA: 0x0001445B File Offset: 0x0001265B
+		// (set) Token: 0x060001BA RID: 442 RVA: 0x00014468 File Offset: 0x00012668
+		internal virtual Button btnRunScrcpyServer
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnRunScrcpyServer;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnRunScrcpyServer_Click);
+				Button btnRunScrcpyServer = this._btnRunScrcpyServer;
+				if (btnRunScrcpyServer != null)
+				{
+					btnRunScrcpyServer.Click -= value2;
+				}
+				this._btnRunScrcpyServer = value;
+				btnRunScrcpyServer = this._btnRunScrcpyServer;
+				if (btnRunScrcpyServer != null)
+				{
+					btnRunScrcpyServer.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000054 RID: 84
+		// (get) Token: 0x060001BB RID: 443 RVA: 0x000144AB File Offset: 0x000126AB
+		// (set) Token: 0x060001BC RID: 444 RVA: 0x000144B8 File Offset: 0x000126B8
+		internal virtual Button btnTurnOffDisplay
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnTurnOffDisplay;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnTurnOffDisplay_Click);
+				Button btnTurnOffDisplay = this._btnTurnOffDisplay;
+				if (btnTurnOffDisplay != null)
+				{
+					btnTurnOffDisplay.Click -= value2;
+				}
+				this._btnTurnOffDisplay = value;
+				btnTurnOffDisplay = this._btnTurnOffDisplay;
+				if (btnTurnOffDisplay != null)
+				{
+					btnTurnOffDisplay.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000055 RID: 85
+		// (get) Token: 0x060001BD RID: 445 RVA: 0x000144FB File Offset: 0x000126FB
+		// (set) Token: 0x060001BE RID: 446 RVA: 0x00014508 File Offset: 0x00012708
+		internal virtual Button btnTurnOffWifi
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnTurnOffWifi;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnTurnOffWifi_Click);
+				Button btnTurnOffWifi = this._btnTurnOffWifi;
+				if (btnTurnOffWifi != null)
+				{
+					btnTurnOffWifi.Click -= value2;
+				}
+				this._btnTurnOffWifi = value;
+				btnTurnOffWifi = this._btnTurnOffWifi;
+				if (btnTurnOffWifi != null)
+				{
+					btnTurnOffWifi.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000056 RID: 86
+		// (get) Token: 0x060001BF RID: 447 RVA: 0x0001454B File Offset: 0x0001274B
+		// (set) Token: 0x060001C0 RID: 448 RVA: 0x00014558 File Offset: 0x00012758
+		internal virtual Button btnComandosShizuku
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnComandosShizuku;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnComandosShizuku_Click);
+				Button btnComandosShizuku = this._btnComandosShizuku;
+				if (btnComandosShizuku != null)
+				{
+					btnComandosShizuku.Click -= value2;
+				}
+				this._btnComandosShizuku = value;
+				btnComandosShizuku = this._btnComandosShizuku;
+				if (btnComandosShizuku != null)
+				{
+					btnComandosShizuku.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000057 RID: 87
+		// (get) Token: 0x060001C1 RID: 449 RVA: 0x0001459B File Offset: 0x0001279B
+		// (set) Token: 0x060001C2 RID: 450 RVA: 0x000145A5 File Offset: 0x000127A5
+		internal virtual Label UserE { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000058 RID: 88
+		// (get) Token: 0x060001C3 RID: 451 RVA: 0x000145AE File Offset: 0x000127AE
+		// (set) Token: 0x060001C4 RID: 452 RVA: 0x000145B8 File Offset: 0x000127B8
+		internal virtual Button btnCleanMotoApps2024
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnCleanMotoApps2024;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnCleanMotoApps2024_Click);
+				Button btnCleanMotoApps = this._btnCleanMotoApps2024;
+				if (btnCleanMotoApps != null)
+				{
+					btnCleanMotoApps.Click -= value2;
+				}
+				this._btnCleanMotoApps2024 = value;
+				btnCleanMotoApps = this._btnCleanMotoApps2024;
+				if (btnCleanMotoApps != null)
+				{
+					btnCleanMotoApps.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000059 RID: 89
+		// (get) Token: 0x060001C5 RID: 453 RVA: 0x000145FB File Offset: 0x000127FB
+		// (set) Token: 0x060001C6 RID: 454 RVA: 0x00014608 File Offset: 0x00012808
+		internal virtual Button btnSolicitarFRPIMEI
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnSolicitarFRPIMEI;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnSolicitarFRPIMEI_Click);
+				Button btnSolicitarFRPIMEI = this._btnSolicitarFRPIMEI;
+				if (btnSolicitarFRPIMEI != null)
+				{
+					btnSolicitarFRPIMEI.Click -= value2;
+				}
+				this._btnSolicitarFRPIMEI = value;
+				btnSolicitarFRPIMEI = this._btnSolicitarFRPIMEI;
+				if (btnSolicitarFRPIMEI != null)
+				{
+					btnSolicitarFRPIMEI.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700005A RID: 90
+		// (get) Token: 0x060001C7 RID: 455 RVA: 0x0001464B File Offset: 0x0001284B
+		// (set) Token: 0x060001C8 RID: 456 RVA: 0x00014655 File Offset: 0x00012855
+		internal virtual DataGridView dgvTickets { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x1700005B RID: 91
+		// (get) Token: 0x060001C9 RID: 457 RVA: 0x0001465E File Offset: 0x0001285E
+		// (set) Token: 0x060001CA RID: 458 RVA: 0x00014668 File Offset: 0x00012868
+		internal virtual Label lblCreditosActuales { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x1700005C RID: 92
+		// (get) Token: 0x060001CB RID: 459 RVA: 0x00014671 File Offset: 0x00012871
+		// (set) Token: 0x060001CC RID: 460 RVA: 0x0001467B File Offset: 0x0001287B
+		internal virtual GroupBox grpRecargas { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x1700005D RID: 93
+		// (get) Token: 0x060001CD RID: 461 RVA: 0x00014684 File Offset: 0x00012884
+		// (set) Token: 0x060001CE RID: 462 RVA: 0x00014690 File Offset: 0x00012890
+		internal virtual Button btnRecarga100
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnRecarga100;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnRecarga100_Click);
+				Button btnRecarga = this._btnRecarga100;
+				if (btnRecarga != null)
+				{
+					btnRecarga.Click -= value2;
+				}
+				this._btnRecarga100 = value;
+				btnRecarga = this._btnRecarga100;
+				if (btnRecarga != null)
+				{
+					btnRecarga.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700005E RID: 94
+		// (get) Token: 0x060001CF RID: 463 RVA: 0x000146D3 File Offset: 0x000128D3
+		// (set) Token: 0x060001D0 RID: 464 RVA: 0x000146E0 File Offset: 0x000128E0
+		internal virtual Button btnRecarga500
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnRecarga500;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnRecarga500_Click);
+				Button btnRecarga = this._btnRecarga500;
+				if (btnRecarga != null)
+				{
+					btnRecarga.Click -= value2;
+				}
+				this._btnRecarga500 = value;
+				btnRecarga = this._btnRecarga500;
+				if (btnRecarga != null)
+				{
+					btnRecarga.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700005F RID: 95
+		// (get) Token: 0x060001D1 RID: 465 RVA: 0x00014723 File Offset: 0x00012923
+		// (set) Token: 0x060001D2 RID: 466 RVA: 0x00014730 File Offset: 0x00012930
+		internal virtual Button btnRecarga200
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnRecarga200;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnRecarga200_Click);
+				Button btnRecarga = this._btnRecarga200;
+				if (btnRecarga != null)
+				{
+					btnRecarga.Click -= value2;
+				}
+				this._btnRecarga200 = value;
+				btnRecarga = this._btnRecarga200;
+				if (btnRecarga != null)
+				{
+					btnRecarga.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000060 RID: 96
+		// (get) Token: 0x060001D3 RID: 467 RVA: 0x00014773 File Offset: 0x00012973
+		// (set) Token: 0x060001D4 RID: 468 RVA: 0x0001477D File Offset: 0x0001297D
+		internal virtual Label lb100creditos { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000061 RID: 97
+		// (get) Token: 0x060001D5 RID: 469 RVA: 0x00014786 File Offset: 0x00012986
+		// (set) Token: 0x060001D6 RID: 470 RVA: 0x00014790 File Offset: 0x00012990
+		internal virtual Label Label3 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000062 RID: 98
+		// (get) Token: 0x060001D7 RID: 471 RVA: 0x00014799 File Offset: 0x00012999
+		// (set) Token: 0x060001D8 RID: 472 RVA: 0x000147A3 File Offset: 0x000129A3
+		internal virtual Label Label4 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000063 RID: 99
+		// (get) Token: 0x060001D9 RID: 473 RVA: 0x000147AC File Offset: 0x000129AC
+		// (set) Token: 0x060001DA RID: 474 RVA: 0x000147B6 File Offset: 0x000129B6
+		internal virtual DataGridView dgvRecargas { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000064 RID: 100
+		// (get) Token: 0x060001DB RID: 475 RVA: 0x000147BF File Offset: 0x000129BF
+		// (set) Token: 0x060001DC RID: 476 RVA: 0x000147CC File Offset: 0x000129CC
+		internal virtual Button btnVerHistorialRecargas
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnVerHistorialRecargas;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnVerHistorialRecargas_Click);
+				Button btnVerHistorialRecargas = this._btnVerHistorialRecargas;
+				if (btnVerHistorialRecargas != null)
+				{
+					btnVerHistorialRecargas.Click -= value2;
+				}
+				this._btnVerHistorialRecargas = value;
+				btnVerHistorialRecargas = this._btnVerHistorialRecargas;
+				if (btnVerHistorialRecargas != null)
+				{
+					btnVerHistorialRecargas.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000065 RID: 101
+		// (get) Token: 0x060001DD RID: 477 RVA: 0x0001480F File Offset: 0x00012A0F
+		// (set) Token: 0x060001DE RID: 478 RVA: 0x00014819 File Offset: 0x00012A19
+		internal virtual TabControl TicketsyCred { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000066 RID: 102
+		// (get) Token: 0x060001DF RID: 479 RVA: 0x00014822 File Offset: 0x00012A22
+		// (set) Token: 0x060001E0 RID: 480 RVA: 0x0001482C File Offset: 0x00012A2C
+		internal virtual TabPage Tickets { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000067 RID: 103
+		// (get) Token: 0x060001E1 RID: 481 RVA: 0x00014835 File Offset: 0x00012A35
+		// (set) Token: 0x060001E2 RID: 482 RVA: 0x0001483F File Offset: 0x00012A3F
+		internal virtual TabPage HistorialRecargas { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000068 RID: 104
+		// (get) Token: 0x060001E3 RID: 483 RVA: 0x00014848 File Offset: 0x00012A48
+		// (set) Token: 0x060001E4 RID: 484 RVA: 0x00014854 File Offset: 0x00012A54
+		internal virtual Button btnVerTickets
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnVerTickets;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnVerTickets_Click);
+				Button btnVerTickets = this._btnVerTickets;
+				if (btnVerTickets != null)
+				{
+					btnVerTickets.Click -= value2;
+				}
+				this._btnVerTickets = value;
+				btnVerTickets = this._btnVerTickets;
+				if (btnVerTickets != null)
+				{
+					btnVerTickets.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000069 RID: 105
+		// (get) Token: 0x060001E5 RID: 485 RVA: 0x00014897 File Offset: 0x00012A97
+		// (set) Token: 0x060001E6 RID: 486 RVA: 0x000148A4 File Offset: 0x00012AA4
+		internal virtual Button btnGestionarCreditos
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnGestionarCreditos;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnGestionarCreditos_Click);
+				Button btnGestionarCreditos = this._btnGestionarCreditos;
+				if (btnGestionarCreditos != null)
+				{
+					btnGestionarCreditos.Click -= value2;
+				}
+				this._btnGestionarCreditos = value;
+				btnGestionarCreditos = this._btnGestionarCreditos;
+				if (btnGestionarCreditos != null)
+				{
+					btnGestionarCreditos.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700006A RID: 106
+		// (get) Token: 0x060001E7 RID: 487 RVA: 0x000148E7 File Offset: 0x00012AE7
+		// (set) Token: 0x060001E8 RID: 488 RVA: 0x000148F4 File Offset: 0x00012AF4
+		internal virtual Button btnOpenAdbAdmin
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnOpenAdbAdmin;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnAbrirGestorApps_Click);
+				Button btnOpenAdbAdmin = this._btnOpenAdbAdmin;
+				if (btnOpenAdbAdmin != null)
+				{
+					btnOpenAdbAdmin.Click -= value2;
+				}
+				this._btnOpenAdbAdmin = value;
+				btnOpenAdbAdmin = this._btnOpenAdbAdmin;
+				if (btnOpenAdbAdmin != null)
+				{
+					btnOpenAdbAdmin.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700006B RID: 107
+		// (get) Token: 0x060001E9 RID: 489 RVA: 0x00014937 File Offset: 0x00012B37
+		// (set) Token: 0x060001EA RID: 490 RVA: 0x00014944 File Offset: 0x00012B44
+		internal virtual Button btnConsultarYEliminarVirusOnline
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnConsultarYEliminarVirusOnline;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnConsultarYEliminarVirusOnline_Click);
+				Button btnConsultarYEliminarVirusOnline = this._btnConsultarYEliminarVirusOnline;
+				if (btnConsultarYEliminarVirusOnline != null)
+				{
+					btnConsultarYEliminarVirusOnline.Click -= value2;
+				}
+				this._btnConsultarYEliminarVirusOnline = value;
+				btnConsultarYEliminarVirusOnline = this._btnConsultarYEliminarVirusOnline;
+				if (btnConsultarYEliminarVirusOnline != null)
+				{
+					btnConsultarYEliminarVirusOnline.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700006C RID: 108
+		// (get) Token: 0x060001EB RID: 491 RVA: 0x00014987 File Offset: 0x00012B87
+		// (set) Token: 0x060001EC RID: 492 RVA: 0x00014994 File Offset: 0x00012B94
+		internal virtual Button btnConsultarKoodousPorHash
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnConsultarKoodousPorHash;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnConsultarKoodousPorHash_Click);
+				Button btnConsultarKoodousPorHash = this._btnConsultarKoodousPorHash;
+				if (btnConsultarKoodousPorHash != null)
+				{
+					btnConsultarKoodousPorHash.Click -= value2;
+				}
+				this._btnConsultarKoodousPorHash = value;
+				btnConsultarKoodousPorHash = this._btnConsultarKoodousPorHash;
+				if (btnConsultarKoodousPorHash != null)
+				{
+					btnConsultarKoodousPorHash.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700006D RID: 109
+		// (get) Token: 0x060001ED RID: 493 RVA: 0x000149D7 File Offset: 0x00012BD7
+		// (set) Token: 0x060001EE RID: 494 RVA: 0x000149E4 File Offset: 0x00012BE4
+		internal virtual Button btnConsultarVirusOnlineSolo
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnConsultarVirusOnlineSolo;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnConsultarVirusOnlineSolo_Click);
+				Button btnConsultarVirusOnlineSolo = this._btnConsultarVirusOnlineSolo;
+				if (btnConsultarVirusOnlineSolo != null)
+				{
+					btnConsultarVirusOnlineSolo.Click -= value2;
+				}
+				this._btnConsultarVirusOnlineSolo = value;
+				btnConsultarVirusOnlineSolo = this._btnConsultarVirusOnlineSolo;
+				if (btnConsultarVirusOnlineSolo != null)
+				{
+					btnConsultarVirusOnlineSolo.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700006E RID: 110
+		// (get) Token: 0x060001EF RID: 495 RVA: 0x00014A27 File Offset: 0x00012C27
+		// (set) Token: 0x060001F0 RID: 496 RVA: 0x00014A31 File Offset: 0x00012C31
+		internal virtual RichTextBox txtOutput { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x1700006F RID: 111
+		// (get) Token: 0x060001F1 RID: 497 RVA: 0x00014A3A File Offset: 0x00012C3A
+		// (set) Token: 0x060001F2 RID: 498 RVA: 0x00014A44 File Offset: 0x00012C44
+		internal virtual CheckBox chkSoloDesactivar { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000070 RID: 112
+		// (get) Token: 0x060001F3 RID: 499 RVA: 0x00014A4D File Offset: 0x00012C4D
+		// (set) Token: 0x060001F4 RID: 500 RVA: 0x00014A58 File Offset: 0x00012C58
+		internal virtual Button btnRevisarKaspersky
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnRevisarKaspersky;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnRevisarKaspersky_Click);
+				Button btnRevisarKaspersky = this._btnRevisarKaspersky;
+				if (btnRevisarKaspersky != null)
+				{
+					btnRevisarKaspersky.Click -= value2;
+				}
+				this._btnRevisarKaspersky = value;
+				btnRevisarKaspersky = this._btnRevisarKaspersky;
+				if (btnRevisarKaspersky != null)
+				{
+					btnRevisarKaspersky.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000071 RID: 113
+		// (get) Token: 0x060001F5 RID: 501 RVA: 0x00014A9B File Offset: 0x00012C9B
+		// (set) Token: 0x060001F6 RID: 502 RVA: 0x00014AA5 File Offset: 0x00012CA5
+		internal virtual Button btnDriversRk { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000072 RID: 114
+		// (get) Token: 0x060001F7 RID: 503 RVA: 0x00014AAE File Offset: 0x00012CAE
+		// (set) Token: 0x060001F8 RID: 504 RVA: 0x00014AB8 File Offset: 0x00012CB8
+		internal virtual Button btnRkchip
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnRkchip;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnRkchip_Click);
+				Button btnRkchip = this._btnRkchip;
+				if (btnRkchip != null)
+				{
+					btnRkchip.Click -= value2;
+				}
+				this._btnRkchip = value;
+				btnRkchip = this._btnRkchip;
+				if (btnRkchip != null)
+				{
+					btnRkchip.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000073 RID: 115
+		// (get) Token: 0x060001F9 RID: 505 RVA: 0x00014AFB File Offset: 0x00012CFB
+		// (set) Token: 0x060001FA RID: 506 RVA: 0x00014B08 File Offset: 0x00012D08
+		internal virtual Button btndrivershonor
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btndrivershonor;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btndrivershonor_Click);
+				Button btndrivershonor = this._btndrivershonor;
+				if (btndrivershonor != null)
+				{
+					btndrivershonor.Click -= value2;
+				}
+				this._btndrivershonor = value;
+				btndrivershonor = this._btndrivershonor;
+				if (btndrivershonor != null)
+				{
+					btndrivershonor.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000074 RID: 116
+		// (get) Token: 0x060001FB RID: 507 RVA: 0x00014B4B File Offset: 0x00012D4B
+		// (set) Token: 0x060001FC RID: 508 RVA: 0x00014B55 File Offset: 0x00012D55
+		internal virtual SplitContainer SplitContainerLog { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000075 RID: 117
+		// (get) Token: 0x060001FD RID: 509 RVA: 0x00014B5E File Offset: 0x00012D5E
+		// (set) Token: 0x060001FE RID: 510 RVA: 0x00014B68 File Offset: 0x00012D68
+		internal virtual Button btnSolicitarFRPIMEI_A56
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnSolicitarFRPIMEI_A56;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnSolicitarFRPIMEI_A56_Click);
+				Button btnSolicitarFRPIMEI_A = this._btnSolicitarFRPIMEI_A56;
+				if (btnSolicitarFRPIMEI_A != null)
+				{
+					btnSolicitarFRPIMEI_A.Click -= value2;
+				}
+				this._btnSolicitarFRPIMEI_A56 = value;
+				btnSolicitarFRPIMEI_A = this._btnSolicitarFRPIMEI_A56;
+				if (btnSolicitarFRPIMEI_A != null)
+				{
+					btnSolicitarFRPIMEI_A.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000076 RID: 118
+		// (get) Token: 0x060001FF RID: 511 RVA: 0x00014BAB File Offset: 0x00012DAB
+		// (set) Token: 0x06000200 RID: 512 RVA: 0x00014BB5 File Offset: 0x00012DB5
+		internal virtual FlowLayoutPanel FlowLayoutPanel1 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000077 RID: 119
+		// (get) Token: 0x06000201 RID: 513 RVA: 0x00014BBE File Offset: 0x00012DBE
+		// (set) Token: 0x06000202 RID: 514 RVA: 0x00014BC8 File Offset: 0x00012DC8
+		internal virtual FlowLayoutPanel FlowLayoutPanel2 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000078 RID: 120
+		// (get) Token: 0x06000203 RID: 515 RVA: 0x00014BD1 File Offset: 0x00012DD1
+		// (set) Token: 0x06000204 RID: 516 RVA: 0x00014BDB File Offset: 0x00012DDB
+		internal virtual FlowLayoutPanel FlowLayoutPanel3 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000079 RID: 121
+		// (get) Token: 0x06000205 RID: 517 RVA: 0x00014BE4 File Offset: 0x00012DE4
+		// (set) Token: 0x06000206 RID: 518 RVA: 0x00014BF0 File Offset: 0x00012DF0
+		internal virtual Button btnSolicitarLicenciaporWhats
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnSolicitarLicenciaporWhats;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnSolicitarLicenciaporWhats_Click);
+				Button btnSolicitarLicenciaporWhats = this._btnSolicitarLicenciaporWhats;
+				if (btnSolicitarLicenciaporWhats != null)
+				{
+					btnSolicitarLicenciaporWhats.Click -= value2;
+				}
+				this._btnSolicitarLicenciaporWhats = value;
+				btnSolicitarLicenciaporWhats = this._btnSolicitarLicenciaporWhats;
+				if (btnSolicitarLicenciaporWhats != null)
+				{
+					btnSolicitarLicenciaporWhats.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700007A RID: 122
+		// (get) Token: 0x06000207 RID: 519 RVA: 0x00014C33 File Offset: 0x00012E33
+		// (set) Token: 0x06000208 RID: 520 RVA: 0x00014C3D File Offset: 0x00012E3D
+		internal virtual FlowLayoutPanel FlowLayoutPanel5 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x1700007B RID: 123
+		// (get) Token: 0x06000209 RID: 521 RVA: 0x00014C46 File Offset: 0x00012E46
+		// (set) Token: 0x0600020A RID: 522 RVA: 0x00014C50 File Offset: 0x00012E50
+		internal virtual FlowLayoutPanel FlowLayoutPanel4 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x1700007C RID: 124
+		// (get) Token: 0x0600020B RID: 523 RVA: 0x00014C59 File Offset: 0x00012E59
+		// (set) Token: 0x0600020C RID: 524 RVA: 0x00014C63 File Offset: 0x00012E63
+		internal virtual FlowLayoutPanel FlowLayoutPanel6 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x1700007D RID: 125
+		// (get) Token: 0x0600020D RID: 525 RVA: 0x00014C6C File Offset: 0x00012E6C
+		// (set) Token: 0x0600020E RID: 526 RVA: 0x00014C76 File Offset: 0x00012E76
+		internal virtual FlowLayoutPanel FlowLayoutPanel7 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x1700007E RID: 126
+		// (get) Token: 0x0600020F RID: 527 RVA: 0x00014C7F File Offset: 0x00012E7F
+		// (set) Token: 0x06000210 RID: 528 RVA: 0x00014C89 File Offset: 0x00012E89
+		internal virtual Label Label5 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x1700007F RID: 127
+		// (get) Token: 0x06000211 RID: 529 RVA: 0x00014C92 File Offset: 0x00012E92
+		// (set) Token: 0x06000212 RID: 530 RVA: 0x00014C9C File Offset: 0x00012E9C
+		internal virtual FlowLayoutPanel FlowLayoutPanel8 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000080 RID: 128
+		// (get) Token: 0x06000213 RID: 531 RVA: 0x00014CA5 File Offset: 0x00012EA5
+		// (set) Token: 0x06000214 RID: 532 RVA: 0x00014CAF File Offset: 0x00012EAF
+		internal virtual FlowLayoutPanel FlowLayoutPanel9 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000081 RID: 129
+		// (get) Token: 0x06000215 RID: 533 RVA: 0x00014CB8 File Offset: 0x00012EB8
+		// (set) Token: 0x06000216 RID: 534 RVA: 0x00014CC2 File Offset: 0x00012EC2
+		internal virtual FlowLayoutPanel FlowLayoutPanel10 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000082 RID: 130
+		// (get) Token: 0x06000217 RID: 535 RVA: 0x00014CCB File Offset: 0x00012ECB
+		// (set) Token: 0x06000218 RID: 536 RVA: 0x00014CD5 File Offset: 0x00012ED5
+		internal virtual FlowLayoutPanel FlowLayoutPanel11 { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000083 RID: 131
+		// (get) Token: 0x06000219 RID: 537 RVA: 0x00014CDE File Offset: 0x00012EDE
+		// (set) Token: 0x0600021A RID: 538 RVA: 0x00014CE8 File Offset: 0x00012EE8
+		internal virtual Button ActivarAdbMotorola { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x17000084 RID: 132
+		// (get) Token: 0x0600021B RID: 539 RVA: 0x00014CF1 File Offset: 0x00012EF1
+		// (set) Token: 0x0600021C RID: 540 RVA: 0x00014CFC File Offset: 0x00012EFC
+		internal virtual Button btnCancelarProceso
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnCancelarProceso;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnCancelarProceso_Click);
+				Button btnCancelarProceso = this._btnCancelarProceso;
+				if (btnCancelarProceso != null)
+				{
+					btnCancelarProceso.Click -= value2;
+				}
+				this._btnCancelarProceso = value;
+				btnCancelarProceso = this._btnCancelarProceso;
+				if (btnCancelarProceso != null)
+				{
+					btnCancelarProceso.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000085 RID: 133
+		// (get) Token: 0x0600021D RID: 541 RVA: 0x00014D3F File Offset: 0x00012F3F
+		// (set) Token: 0x0600021E RID: 542 RVA: 0x00014D4C File Offset: 0x00012F4C
+		internal virtual Button btnFlashSamsung
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnFlashSamsung;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnFlashSamsung_Click);
+				Button btnFlashSamsung = this._btnFlashSamsung;
+				if (btnFlashSamsung != null)
+				{
+					btnFlashSamsung.Click -= value2;
+				}
+				this._btnFlashSamsung = value;
+				btnFlashSamsung = this._btnFlashSamsung;
+				if (btnFlashSamsung != null)
+				{
+					btnFlashSamsung.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000086 RID: 134
+		// (get) Token: 0x0600021F RID: 543 RVA: 0x00014D8F File Offset: 0x00012F8F
+		// (set) Token: 0x06000220 RID: 544 RVA: 0x00014D9C File Offset: 0x00012F9C
+		internal virtual Button btnDisableUpdatePixel
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnDisableUpdatePixel;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnDisableUpdatePixel_Click);
+				Button btnDisableUpdatePixel = this._btnDisableUpdatePixel;
+				if (btnDisableUpdatePixel != null)
+				{
+					btnDisableUpdatePixel.Click -= value2;
+				}
+				this._btnDisableUpdatePixel = value;
+				btnDisableUpdatePixel = this._btnDisableUpdatePixel;
+				if (btnDisableUpdatePixel != null)
+				{
+					btnDisableUpdatePixel.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000087 RID: 135
+		// (get) Token: 0x06000221 RID: 545 RVA: 0x00014DDF File Offset: 0x00012FDF
+		// (set) Token: 0x06000222 RID: 546 RVA: 0x00014DEC File Offset: 0x00012FEC
+		internal virtual Button btnUnlockTMobile
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnUnlockTMobile;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnUnlockTMobile_Click);
+				Button btnUnlockTMobile = this._btnUnlockTMobile;
+				if (btnUnlockTMobile != null)
+				{
+					btnUnlockTMobile.Click -= value2;
+				}
+				this._btnUnlockTMobile = value;
+				btnUnlockTMobile = this._btnUnlockTMobile;
+				if (btnUnlockTMobile != null)
+				{
+					btnUnlockTMobile.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000088 RID: 136
+		// (get) Token: 0x06000223 RID: 547 RVA: 0x00014E2F File Offset: 0x0001302F
+		// (set) Token: 0x06000224 RID: 548 RVA: 0x00014E3C File Offset: 0x0001303C
+		internal virtual Button btnWipeFastbootHonor
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnWipeFastbootHonor;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnWipeFastbootHonor_Click);
+				Button btnWipeFastbootHonor = this._btnWipeFastbootHonor;
+				if (btnWipeFastbootHonor != null)
+				{
+					btnWipeFastbootHonor.Click -= value2;
+				}
+				this._btnWipeFastbootHonor = value;
+				btnWipeFastbootHonor = this._btnWipeFastbootHonor;
+				if (btnWipeFastbootHonor != null)
+				{
+					btnWipeFastbootHonor.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x17000089 RID: 137
+		// (get) Token: 0x06000225 RID: 549 RVA: 0x00014E7F File Offset: 0x0001307F
+		// (set) Token: 0x06000226 RID: 550 RVA: 0x00014E8C File Offset: 0x0001308C
+		internal virtual Button btnOpenFileHxd
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnOpenFileHxd;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnOpenFileHxd_Click);
+				Button btnOpenFileHxd = this._btnOpenFileHxd;
+				if (btnOpenFileHxd != null)
+				{
+					btnOpenFileHxd.Click -= value2;
+				}
+				this._btnOpenFileHxd = value;
+				btnOpenFileHxd = this._btnOpenFileHxd;
+				if (btnOpenFileHxd != null)
+				{
+					btnOpenFileHxd.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700008A RID: 138
+		// (get) Token: 0x06000227 RID: 551 RVA: 0x00014ECF File Offset: 0x000130CF
+		// (set) Token: 0x06000228 RID: 552 RVA: 0x00014EDC File Offset: 0x000130DC
+		internal virtual Button btnProcesoXiaomi
+		{
+			[CompilerGenerated]
+			get
+			{
+				return this._btnProcesoXiaomi;
+			}
+			[CompilerGenerated]
+			[MethodImpl(MethodImplOptions.Synchronized)]
+			set
+			{
+				EventHandler value2 = new EventHandler(this.btnProcesoXiaomi_Click);
+				Button btnProcesoXiaomi = this._btnProcesoXiaomi;
+				if (btnProcesoXiaomi != null)
+				{
+					btnProcesoXiaomi.Click -= value2;
+				}
+				this._btnProcesoXiaomi = value;
+				btnProcesoXiaomi = this._btnProcesoXiaomi;
+				if (btnProcesoXiaomi != null)
+				{
+					btnProcesoXiaomi.Click += value2;
+				}
+			}
+		}
+
+		// Token: 0x1700008B RID: 139
+		// (get) Token: 0x06000229 RID: 553 RVA: 0x00014F1F File Offset: 0x0001311F
+		// (set) Token: 0x0600022A RID: 554 RVA: 0x00014F29 File Offset: 0x00013129
+		internal virtual Button btnProcesoXiaomii { get; [MethodImpl(MethodImplOptions.Synchronized)] set; }
+
+		// Token: 0x0400000B RID: 11
 		private JObject permisosUsuario;
 
-		// Token: 0x04000010 RID: 16
-		private const string CurrentVersion = "0.1.15";
+		// Token: 0x0400000C RID: 12
+		private const string CurrentVersion = "0.1.12";
 
-		// Token: 0x04000011 RID: 17
+		// Token: 0x0400000D RID: 13
 		private const string VersionUrl = "https://reparacionesdecelular.com/up/versionts.txt";
 
-		// Token: 0x04000012 RID: 18
+		// Token: 0x0400000E RID: 14
 		private System.Timers.Timer fastbootTimer;
 
-		// Token: 0x04000013 RID: 19
+		// Token: 0x0400000F RID: 15
 		private bool downloading;
 
-		// Token: 0x04000014 RID: 20
+		// Token: 0x04000010 RID: 16
 		private string xmlFilePath;
 
-		// Token: 0x04000015 RID: 21
+		// Token: 0x04000011 RID: 17
 		private WebClient webClient;
 
-		// Token: 0x04000016 RID: 22
+		// Token: 0x04000012 RID: 18
 		private bool processRunning;
 
-		// Token: 0x04000017 RID: 23
+		// Token: 0x04000013 RID: 19
 		private bool cancelRequested;
 
-		// Token: 0x04000018 RID: 24
+		// Token: 0x04000014 RID: 20
 		private string downloadedFilePath;
 
-		// Token: 0x04000019 RID: 25
+		// Token: 0x04000015 RID: 21
 		private bool isUnzipping;
 
-		// Token: 0x0400001C RID: 28
+		// Token: 0x04000017 RID: 23
+		private System.Timers.Timer updateTimer;
+
+		// Token: 0x04000018 RID: 24
 		private Dictionary<string, List<string>> brandsAndModels;
 
-		// Token: 0x0400001D RID: 29
+		// Token: 0x04000019 RID: 25
 		private string placeholderText;
 
-		// Token: 0x0400001E RID: 30
-		private CancellationTokenSource cts;
-
-		// Token: 0x0400001F RID: 31
+		// Token: 0x0400001A RID: 26
 		private bool verificandoBloqueos;
 
-		// Token: 0x04000020 RID: 32
+		// Token: 0x0400001B RID: 27
 		private string currentFilePath;
 
-		// Token: 0x04000021 RID: 33
+		// Token: 0x0400001C RID: 28
 		private object processLock;
 
-		// Token: 0x04000022 RID: 34
-		private readonly byte[] misc_qualcomm;
-
-		// Token: 0x04000023 RID: 35
-		private readonly byte[] para_mtk;
-
-		// Token: 0x04000024 RID: 36
-		private readonly byte[] misc_mtk;
-
-		// Token: 0x0200001E RID: 30
+		// Token: 0x02000015 RID: 21
 		public class VirusAnalysisResult
 		{
-			// Token: 0x170000F8 RID: 248
-			// (get) Token: 0x0600042B RID: 1067 RVA: 0x000204FA File Offset: 0x0001E6FA
-			// (set) Token: 0x0600042C RID: 1068 RVA: 0x00020504 File Offset: 0x0001E704
+			// Token: 0x170000BD RID: 189
+			// (get) Token: 0x06000363 RID: 867 RVA: 0x0001B828 File Offset: 0x00019A28
+			// (set) Token: 0x06000364 RID: 868 RVA: 0x0001B832 File Offset: 0x00019A32
 			public bool IsThreat { get; set; }
 
-			// Token: 0x170000F9 RID: 249
-			// (get) Token: 0x0600042D RID: 1069 RVA: 0x0002050D File Offset: 0x0001E70D
-			// (set) Token: 0x0600042E RID: 1070 RVA: 0x00020517 File Offset: 0x0001E717
+			// Token: 0x170000BE RID: 190
+			// (get) Token: 0x06000365 RID: 869 RVA: 0x0001B83B File Offset: 0x00019A3B
+			// (set) Token: 0x06000366 RID: 870 RVA: 0x0001B845 File Offset: 0x00019A45
 			public string SHA256 { get; set; }
 
-			// Token: 0x170000FA RID: 250
-			// (get) Token: 0x0600042F RID: 1071 RVA: 0x00020520 File Offset: 0x0001E720
-			// (set) Token: 0x06000430 RID: 1072 RVA: 0x0002052A File Offset: 0x0001E72A
+			// Token: 0x170000BF RID: 191
+			// (get) Token: 0x06000367 RID: 871 RVA: 0x0001B84E File Offset: 0x00019A4E
+			// (set) Token: 0x06000368 RID: 872 RVA: 0x0001B858 File Offset: 0x00019A58
 			public int Malicious { get; set; }
 
-			// Token: 0x170000FB RID: 251
-			// (get) Token: 0x06000431 RID: 1073 RVA: 0x00020533 File Offset: 0x0001E733
-			// (set) Token: 0x06000432 RID: 1074 RVA: 0x0002053D File Offset: 0x0001E73D
+			// Token: 0x170000C0 RID: 192
+			// (get) Token: 0x06000369 RID: 873 RVA: 0x0001B861 File Offset: 0x00019A61
+			// (set) Token: 0x0600036A RID: 874 RVA: 0x0001B86B File Offset: 0x00019A6B
 			public int Suspicious { get; set; }
 
-			// Token: 0x170000FC RID: 252
-			// (get) Token: 0x06000433 RID: 1075 RVA: 0x00020546 File Offset: 0x0001E746
-			// (set) Token: 0x06000434 RID: 1076 RVA: 0x00020550 File Offset: 0x0001E750
+			// Token: 0x170000C1 RID: 193
+			// (get) Token: 0x0600036B RID: 875 RVA: 0x0001B874 File Offset: 0x00019A74
+			// (set) Token: 0x0600036C RID: 876 RVA: 0x0001B87E File Offset: 0x00019A7E
 			public int Undetected { get; set; }
 		}
 	}
